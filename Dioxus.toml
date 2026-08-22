@@ -14,4 +14,4 @@ script = []
 [bundle]
 identifier = "com.upio"
 publisher = "sn0w12"
-icon = ["crates/gui/assets/icon.png"]
+icon = ["crates/gui/assets/brand/logo.png"]
