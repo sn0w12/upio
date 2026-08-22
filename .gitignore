@@ -1,0 +1,7 @@
+/target
+*.pdb
+.DS_Store
+**/*.rs.bk
+
+__pycache__
+crates/gui/assets/tailwind.css

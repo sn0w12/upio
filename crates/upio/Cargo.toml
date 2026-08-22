@@ -1,0 +1,27 @@
+[package]
+name = "upio"
+description = "Unified library for uploading files to various hosting services"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["bunkr", "gofile", "fileditch", "filester"]
+bunkr = ["dep:uploader-bunkr"]
+gofile = ["dep:uploader-gofile"]
+fileditch = ["dep:uploader-fileditch"]
+filester = ["dep:uploader-filester"]
+
+[dependencies]
+upio-core = { workspace = true }
+uploader-bunkr = { workspace = true, optional = true }
+uploader-gofile = { workspace = true, optional = true }
+uploader-fileditch = { workspace = true, optional = true }
+uploader-filester = { workspace = true, optional = true }
+futures = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true }

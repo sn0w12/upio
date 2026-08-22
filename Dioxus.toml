@@ -1,0 +1,17 @@
+[application]
+name = "Upio"
+
+[web.app]
+title = "upio"
+
+[web.resource]
+style = []
+script = []
+
+[web.resource.dev]
+script = []
+
+[bundle]
+identifier = "com.upio"
+publisher = "sn0w12"
+icon = ["crates/gui/assets/icon.png"]

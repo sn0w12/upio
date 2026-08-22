@@ -1,0 +1,15 @@
+[package]
+name = "uploader-gofile"
+description = "GoFile.io uploader implementation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+upio-core = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

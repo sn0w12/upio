@@ -1,0 +1,69 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/uploader-bunkr",
+    "crates/uploader-gofile",
+    "crates/uploader-fileditch",
+    "crates/uploader-filester",
+    "crates/upio",
+    "crates/config",
+    "crates/cli",
+    'crates/gui',
+]
+default-members = ["crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+anyhow = "1.0"
+assert_cmd = "2"
+async-trait = "0.1"
+clap = { version = "4", features = ["derive"] }
+dirs = "6.0"
+figment = { version = "0.10", features = ["toml", "env"] }
+futures = "0.3"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+mime_guess = "2.0"
+reqwest = { version = "0.12", default-features = false, features = ["multipart", "json", "stream", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tiny-table = "0.2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread"] }
+tokio-util = { version = "0.7", features = ["io"] }
+toml = "0.8"
+uuid = { version = "1", features = ["v4"] }
+walkdir = "2"
+
+tempfile = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+dioxus = { version = "0.7.1", features = ["router"] }
+dioxus-icons = "0.1"
+dioxus-primitives = { git = "https://github.com/DioxusLabs/components", version = "0.0.1", default-features = false }
+tw_merge = "0.1"
+rfd = "0.15"
+arboard = "3"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+upio = { path = "crates/upio" }
+upio-core = { path = "crates/core" }
+upio-config = { path = "crates/config" }
+uploader-bunkr = { path = "crates/uploader-bunkr" }
+uploader-gofile = { path = "crates/uploader-gofile" }
+uploader-fileditch = { path = "crates/uploader-fileditch" }
+uploader-filester = { path = "crates/uploader-filester" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
