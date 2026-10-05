@@ -140,6 +140,10 @@ pub struct UploadResult {
 
 pub type BoxedUploader = Box<dyn Uploader>;
 
+// `async_trait` puts `#[must_use]` on the boxed futures it generates, and those
+// futures are themselves `#[must_use]`, which clippy's `double_must_use` lint
+// rejects. The attribute is the macro's, so it can only be silenced here.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait Uploader: Send + Sync {
     /// Perform any one-time, potentially network-bound setup (e.g. verifying a
