@@ -1,0 +1,11 @@
+{
+  "name": "upio-gui-assets",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i tailwind.css -o assets/tailwind.css"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.1.5",
+    "tailwindcss": "4.1.5"
+  }
+}

@@ -26,6 +26,16 @@ jobs:
                       libayatana-appindicator3-dev \
                       librsvg2-dev
 
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 20
+
+            - name: Build Tailwind CSS
+              working-directory: crates/gui
+              run: |
+                  npm ci --no-audit --no-fund
+                  npm run build:css
+
             - uses: Swatinem/rust-cache@v2
 
             - name: Format
