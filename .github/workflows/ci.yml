@@ -16,7 +16,16 @@ jobs:
             - uses: dtolnay/rust-toolchain@stable
               with:
                   components: clippy, rustfmt
-                  
+
+            - name: Install GUI build dependencies
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install --no-install-recommends --yes \
+                      libgtk-3-dev \
+                      libwebkit2gtk-4.1-dev \
+                      libayatana-appindicator3-dev \
+                      librsvg2-dev
+
             - uses: Swatinem/rust-cache@v2
 
             - name: Format
