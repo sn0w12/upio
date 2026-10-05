@@ -6212,6 +6212,7 @@ dependencies = [
  "uploader-filester",
  "uploader-gofile",
  "uploader-goonbox",
+ "uploader-pixeldrain",
 ]
 
 [[package]]
@@ -6348,6 +6349,19 @@ dependencies = [
  "dirs",
  "futures",
  "rand 0.9.5",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+ "upio-core",
+]
+
+[[package]]
+name = "uploader-pixeldrain"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

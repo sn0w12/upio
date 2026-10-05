@@ -57,6 +57,31 @@ fn build_goonbox_with_credentials_succeeds() {
 }
 
 #[test]
+fn build_pixeldrain_without_token_fails() {
+    let id = UploaderId::from_name("pixeldrain").unwrap();
+    let config = UploaderEndpointConfig::default();
+    let err = match build_uploader(id, &config) {
+        Ok(_) => panic!("pixeldrain built without a token"),
+        Err(e) => e,
+    };
+    assert!(matches!(err, BuildError::MissingToken(_)));
+}
+
+#[test]
+fn build_pixeldrain_with_token_succeeds() {
+    let id = UploaderId::from_name("pixeldrain").unwrap();
+    let config = UploaderEndpointConfig {
+        token: Some("key".to_string()),
+        ..Default::default()
+    };
+    let uploader = match build_uploader(id, &config) {
+        Ok(uploader) => uploader,
+        Err(e) => panic!("build failed: {}", e),
+    };
+    assert_eq!(uploader.name(), "pixeldrain");
+}
+
+#[test]
 fn build_fileditch_requires_no_token() {
     let id = UploaderId::from_name("fileditch").unwrap();
     let config = UploaderEndpointConfig::default();

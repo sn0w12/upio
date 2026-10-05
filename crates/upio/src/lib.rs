@@ -28,3 +28,5 @@ pub use uploader_filester::*;
 pub use uploader_gofile::*;
 #[cfg(feature = "goonbox")]
 pub use uploader_goonbox::*;
+#[cfg(feature = "pixeldrain")]
+pub use uploader_pixeldrain::*;

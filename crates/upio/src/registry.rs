@@ -28,6 +28,8 @@ pub enum UploaderId {
     Filester,
     #[cfg(feature = "goonbox")]
     Goonbox,
+    #[cfg(feature = "pixeldrain")]
+    Pixeldrain,
 }
 
 impl UploaderId {
@@ -43,6 +45,8 @@ impl UploaderId {
         UploaderId::Filester,
         #[cfg(feature = "goonbox")]
         UploaderId::Goonbox,
+        #[cfg(feature = "pixeldrain")]
+        UploaderId::Pixeldrain,
     ];
 
     /// The service name as used in config files, CLI flags, and env vars.
@@ -58,6 +62,8 @@ impl UploaderId {
             UploaderId::Filester => "filester",
             #[cfg(feature = "goonbox")]
             UploaderId::Goonbox => "goonbox",
+            #[cfg(feature = "pixeldrain")]
+            UploaderId::Pixeldrain => "pixeldrain",
         }
     }
 
@@ -74,6 +80,8 @@ impl UploaderId {
             UploaderId::Filester => uploader_filester::FilesterUploader::CAPABILITIES,
             #[cfg(feature = "goonbox")]
             UploaderId::Goonbox => uploader_goonbox::GoonboxUploader::CAPABILITIES,
+            #[cfg(feature = "pixeldrain")]
+            UploaderId::Pixeldrain => uploader_pixeldrain::PixeldrainUploader::CAPABILITIES,
         }
     }
 
@@ -94,6 +102,8 @@ impl UploaderId {
             UploaderId::Filester => uploader_filester::FilesterUploader::MAX_FILE_SIZE,
             #[cfg(feature = "goonbox")]
             UploaderId::Goonbox => uploader_goonbox::GoonboxUploader::MAX_FILE_SIZE,
+            #[cfg(feature = "pixeldrain")]
+            UploaderId::Pixeldrain => uploader_pixeldrain::PixeldrainUploader::MAX_FILE_SIZE,
         }
     }
 
@@ -226,6 +236,16 @@ pub fn build_uploader(
             Ok(Box::new(uploader_goonbox::GoonboxUploader::new(
                 &username, &password,
             )))
+        }
+        #[cfg(feature = "pixeldrain")]
+        UploaderId::Pixeldrain => {
+            let token = config
+                .token
+                .as_deref()
+                .ok_or_else(|| BuildError::MissingToken(id.name().to_string()))?;
+            Ok(Box::new(
+                uploader_pixeldrain::PixeldrainUploader::with_token(token),
+            ))
         }
     }
 }

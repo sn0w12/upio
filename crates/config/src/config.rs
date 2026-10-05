@@ -24,6 +24,8 @@ pub struct Config {
     pub filester: Option<UploaderEndpointConfig>,
     #[serde(default)]
     pub goonbox: Option<UploaderEndpointConfig>,
+    #[serde(default)]
+    pub pixeldrain: Option<UploaderEndpointConfig>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -101,6 +103,7 @@ impl Config {
             "fileditch" => self.fileditch.clone().unwrap_or_default(),
             "filester" => self.filester.clone().unwrap_or_default(),
             "goonbox" => self.goonbox.clone().unwrap_or_default(),
+            "pixeldrain" => self.pixeldrain.clone().unwrap_or_default(),
             _ => UploaderEndpointConfig::default(),
         }
     }

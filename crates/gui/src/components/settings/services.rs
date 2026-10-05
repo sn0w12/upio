@@ -127,6 +127,7 @@ fn token_key(id: UploaderId) -> Option<ConfigKey> {
         UploaderId::Bunkr => Some(ConfigKey::BunkrToken),
         UploaderId::Gofile => Some(ConfigKey::GofileToken),
         UploaderId::Filester => Some(ConfigKey::FilesterToken),
+        UploaderId::Pixeldrain => Some(ConfigKey::PixeldrainToken),
         // Fileditch needs no token; the GUI renders no field for it.
         UploaderId::Fileditch => None,
         UploaderId::Goonbox => None,
@@ -138,6 +139,7 @@ fn token_description(id: UploaderId) -> &'static str {
         UploaderId::Bunkr => "Required. Create one in your Bunkr account settings.",
         UploaderId::Gofile => "Optional. Raises the size limit and unlocks folders.",
         UploaderId::Filester => "Optional.",
+        UploaderId::Pixeldrain => "Required. Create one on your Pixeldrain API keys page.",
         UploaderId::Fileditch => "",
         UploaderId::Goonbox => "",
     }
@@ -148,6 +150,7 @@ fn token_placeholder(id: UploaderId) -> &'static str {
         UploaderId::Bunkr => "Paste your Bunkr token",
         UploaderId::Gofile => "Paste your GoFile token",
         UploaderId::Filester => "Paste your Filester token",
+        UploaderId::Pixeldrain => "Paste your Pixeldrain API key",
         UploaderId::Fileditch => "",
         UploaderId::Goonbox => "",
     }

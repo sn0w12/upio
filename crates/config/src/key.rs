@@ -17,6 +17,8 @@ pub enum ConfigKey {
     GofileServer,
     FilesterToken,
     FilesterFolderId,
+    PixeldrainToken,
+    PixeldrainFolderId,
     GoonboxUsername,
     GoonboxPassword,
     GoonboxFolderId,
@@ -32,6 +34,8 @@ impl ConfigKey {
         Self::GofileServer,
         Self::FilesterToken,
         Self::FilesterFolderId,
+        Self::PixeldrainToken,
+        Self::PixeldrainFolderId,
         Self::GoonboxUsername,
         Self::GoonboxPassword,
         Self::GoonboxFolderId,
@@ -48,6 +52,8 @@ impl ConfigKey {
             Self::GofileServer => "gofile.server",
             Self::FilesterToken => "filester.token",
             Self::FilesterFolderId => "filester.folder_id",
+            Self::PixeldrainToken => "pixeldrain.token",
+            Self::PixeldrainFolderId => "pixeldrain.folder_id",
             Self::GoonboxUsername => "goonbox.username",
             Self::GoonboxPassword => "goonbox.password",
             Self::GoonboxFolderId => "goonbox.folder_id",
@@ -59,7 +65,11 @@ impl ConfigKey {
     pub const fn is_secret(self) -> bool {
         matches!(
             self,
-            Self::BunkrToken | Self::GofileToken | Self::FilesterToken | Self::GoonboxPassword
+            Self::BunkrToken
+                | Self::GofileToken
+                | Self::FilesterToken
+                | Self::PixeldrainToken
+                | Self::GoonboxPassword
         )
     }
 
@@ -74,6 +84,8 @@ impl ConfigKey {
             Self::GofileServer => server_of(&config.gofile),
             Self::FilesterToken => token_of(&config.filester),
             Self::FilesterFolderId => folder_id_of(&config.filester),
+            Self::PixeldrainToken => token_of(&config.pixeldrain),
+            Self::PixeldrainFolderId => folder_id_of(&config.pixeldrain),
             Self::GoonboxUsername => text_of(&config.goonbox, |c| c.username.as_deref()),
             Self::GoonboxPassword => text_of(&config.goonbox, |c| c.password.as_deref()),
             Self::GoonboxFolderId => folder_id_of(&config.goonbox),
@@ -106,6 +118,8 @@ impl ConfigKey {
             Self::GofileServer => endpoint(&mut config.gofile).server = opt(value),
             Self::FilesterToken => endpoint(&mut config.filester).token = opt(value),
             Self::FilesterFolderId => endpoint(&mut config.filester).folder_id = opt(value),
+            Self::PixeldrainToken => endpoint(&mut config.pixeldrain).token = opt(value),
+            Self::PixeldrainFolderId => endpoint(&mut config.pixeldrain).folder_id = opt(value),
             Self::GoonboxUsername => endpoint(&mut config.goonbox).username = opt(value),
             Self::GoonboxPassword => endpoint(&mut config.goonbox).password = opt(value),
             Self::GoonboxFolderId => endpoint(&mut config.goonbox).folder_id = opt(value),

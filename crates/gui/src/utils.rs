@@ -11,6 +11,7 @@ pub fn service_display_name(id: UploaderId) -> &'static str {
         UploaderId::Fileditch => "Fileditch",
         UploaderId::Filester => "Filester",
         UploaderId::Goonbox => "GoonBox",
+        UploaderId::Pixeldrain => "Pixeldrain",
     }
 }
 
