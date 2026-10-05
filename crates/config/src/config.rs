@@ -22,6 +22,8 @@ pub struct Config {
     pub fileditch: Option<UploaderEndpointConfig>,
     #[serde(default)]
     pub filester: Option<UploaderEndpointConfig>,
+    #[serde(default)]
+    pub goonbox: Option<UploaderEndpointConfig>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -98,6 +100,7 @@ impl Config {
             "gofile" => self.gofile.clone().unwrap_or_default(),
             "fileditch" => self.fileditch.clone().unwrap_or_default(),
             "filester" => self.filester.clone().unwrap_or_default(),
+            "goonbox" => self.goonbox.clone().unwrap_or_default(),
             _ => UploaderEndpointConfig::default(),
         }
     }

@@ -26,3 +26,5 @@ pub use uploader_fileditch::*;
 pub use uploader_filester::*;
 #[cfg(feature = "gofile")]
 pub use uploader_gofile::*;
+#[cfg(feature = "goonbox")]
+pub use uploader_goonbox::*;

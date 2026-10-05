@@ -5,9 +5,12 @@
 //! GUI, tests) should use [`UploaderId`] and [`build_uploader`] instead of
 //! hard-coding per-service logic.
 
-use upio_core::{
-    filesize::FileSize, BoxedUploader, Uploader, UploaderCapabilities, UploaderEndpointConfig,
-};
+use upio_core::{filesize::FileSize, BoxedUploader, UploaderCapabilities, UploaderEndpointConfig};
+
+// Only Bunkr's size limit needs a constructed uploader to answer, so the trait
+// is in scope exactly when that one is compiled in.
+#[cfg(feature = "bunkr")]
+use upio_core::Uploader;
 
 /// A known uploader service.
 ///
@@ -23,6 +26,8 @@ pub enum UploaderId {
     Fileditch,
     #[cfg(feature = "filester")]
     Filester,
+    #[cfg(feature = "goonbox")]
+    Goonbox,
 }
 
 impl UploaderId {
@@ -36,6 +41,8 @@ impl UploaderId {
         UploaderId::Fileditch,
         #[cfg(feature = "filester")]
         UploaderId::Filester,
+        #[cfg(feature = "goonbox")]
+        UploaderId::Goonbox,
     ];
 
     /// The service name as used in config files, CLI flags, and env vars.
@@ -49,6 +56,8 @@ impl UploaderId {
             UploaderId::Fileditch => "fileditch",
             #[cfg(feature = "filester")]
             UploaderId::Filester => "filester",
+            #[cfg(feature = "goonbox")]
+            UploaderId::Goonbox => "goonbox",
         }
     }
 
@@ -63,6 +72,8 @@ impl UploaderId {
             UploaderId::Fileditch => uploader_fileditch::FileditchUploader::CAPABILITIES,
             #[cfg(feature = "filester")]
             UploaderId::Filester => uploader_filester::FilesterUploader::CAPABILITIES,
+            #[cfg(feature = "goonbox")]
+            UploaderId::Goonbox => uploader_goonbox::GoonboxUploader::CAPABILITIES,
         }
     }
 
@@ -81,6 +92,8 @@ impl UploaderId {
             UploaderId::Fileditch => uploader_fileditch::FileditchUploader::MAX_FILE_SIZE,
             #[cfg(feature = "filester")]
             UploaderId::Filester => uploader_filester::FilesterUploader::MAX_FILE_SIZE,
+            #[cfg(feature = "goonbox")]
+            UploaderId::Goonbox => uploader_goonbox::GoonboxUploader::MAX_FILE_SIZE,
         }
     }
 
@@ -113,14 +126,15 @@ impl std::fmt::Display for BuildError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             BuildError::Unknown(name) => write!(f, "unknown uploader '{}'", name),
-            BuildError::MissingToken(name) => {
-                write!(
+            BuildError::MissingToken(name) => match missing_credential_hint(name) {
+                Some(hint) => write!(f, "{hint}"),
+                None => write!(
                     f,
                     "no token for '{}' (set config or UPIO_{}_TOKEN)",
                     name,
                     name.to_uppercase()
-                )
-            }
+                ),
+            },
             BuildError::Init(msg) => write!(f, "failed to init uploader: {}", msg),
         }
     }
@@ -128,11 +142,26 @@ impl std::fmt::Display for BuildError {
 
 impl std::error::Error for BuildError {}
 
+/// Services that sign in with an account instead of a token need their own
+/// advice, or the caller is told to set a key the service does not read.
+fn missing_credential_hint(name: &str) -> Option<String> {
+    #[cfg(feature = "goonbox")]
+    if name == "goonbox" {
+        return Some(
+            "goonbox needs a username and password (set goonbox.username and goonbox.password, \
+             or UPIO_GOONBOX_USERNAME and UPIO_GOONBOX_PASSWORD)"
+                .to_string(),
+        );
+    }
+    let _ = name;
+    None
+}
+
 /// Build an uploader for the given id from its endpoint config.
 ///
 /// Tokens required by a service are read from `config.token`. Construction is
 /// synchronous; any network setup is deferred until upload time via
-/// [`Uploader::init`]. On success the boxed uploader implements
+/// `init`. On success the boxed uploader implements
 /// [`upio_core::Uploader`] and can be driven by the shared pipeline.
 ///
 /// # Errors
@@ -183,6 +212,20 @@ pub fn build_uploader(
                 None => uploader_filester::FilesterUploader::new(),
             };
             Ok(Box::new(uploader))
+        }
+        #[cfg(feature = "goonbox")]
+        UploaderId::Goonbox => {
+            // GoonBox signs in rather than using a token, and its login is
+            // captcha-gated, so the credentials are passed through and the
+            // captcha is solved on demand.
+            let username = config.username.clone().unwrap_or_default();
+            let password = config.password.clone().unwrap_or_default();
+            if username.is_empty() || password.is_empty() {
+                return Err(BuildError::MissingToken(id.name().to_string()));
+            }
+            Ok(Box::new(uploader_goonbox::GoonboxUploader::new(
+                &username, &password,
+            )))
         }
     }
 }

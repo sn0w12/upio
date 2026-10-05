@@ -206,6 +206,7 @@ fn endpoint_of(config: &mut Config, id: UploaderId) -> &mut UploaderEndpointConf
         UploaderId::Gofile => &mut config.gofile,
         UploaderId::Fileditch => &mut config.fileditch,
         UploaderId::Filester => &mut config.filester,
+        UploaderId::Goonbox => &mut config.goonbox,
     };
     section.get_or_insert_with(Default::default)
 }

@@ -94,6 +94,9 @@ fn ServiceDetail(id: UploaderId) -> Element {
                 UploaderId::Fileditch => rsx! {
                     p { class: "text-sm text-muted-foreground", "Fileditch needs no configuration and accepts any file." }
                 },
+                UploaderId::Goonbox => rsx! {
+                    GoonboxFields {}
+                },
                 _ => rsx! {
                     div { class: "flex flex-col gap-5",
                         ConfigInput {
@@ -126,6 +129,7 @@ fn token_key(id: UploaderId) -> Option<ConfigKey> {
         UploaderId::Filester => Some(ConfigKey::FilesterToken),
         // Fileditch needs no token; the GUI renders no field for it.
         UploaderId::Fileditch => None,
+        UploaderId::Goonbox => None,
     }
 }
 
@@ -135,6 +139,7 @@ fn token_description(id: UploaderId) -> &'static str {
         UploaderId::Gofile => "Optional. Raises the size limit and unlocks folders.",
         UploaderId::Filester => "Optional.",
         UploaderId::Fileditch => "",
+        UploaderId::Goonbox => "",
     }
 }
 
@@ -144,6 +149,31 @@ fn token_placeholder(id: UploaderId) -> &'static str {
         UploaderId::Gofile => "Paste your GoFile token",
         UploaderId::Filester => "Paste your Filester token",
         UploaderId::Fileditch => "",
+        UploaderId::Goonbox => "",
+    }
+}
+
+/// GoonBox signs in with an account rather than a token, and its login is
+/// captcha-gated, so it needs its own fields instead of the token one.
+#[component]
+fn GoonboxFields() -> Element {
+    rsx! {
+        div { class: "flex flex-col gap-5",
+            ConfigInput {
+                config_key: ConfigKey::GoonboxUsername,
+                label: "Username",
+                description: "Required. The GoonBox account images are uploaded to.",
+                placeholder: "your GoonBox username",
+                password: false,
+            }
+            ConfigInput {
+                config_key: ConfigKey::GoonboxPassword,
+                label: "Password",
+                description: "Required. The captcha is solved automatically when you upload.",
+                placeholder: "Your GoonBox password",
+                password: true,
+            }
+        }
     }
 }
 

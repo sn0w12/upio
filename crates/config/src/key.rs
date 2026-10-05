@@ -17,6 +17,9 @@ pub enum ConfigKey {
     GofileServer,
     FilesterToken,
     FilesterFolderId,
+    GoonboxUsername,
+    GoonboxPassword,
+    GoonboxFolderId,
 }
 
 impl ConfigKey {
@@ -29,6 +32,9 @@ impl ConfigKey {
         Self::GofileServer,
         Self::FilesterToken,
         Self::FilesterFolderId,
+        Self::GoonboxUsername,
+        Self::GoonboxPassword,
+        Self::GoonboxFolderId,
     ];
 
     /// The dotted key as written in config files and CLI commands.
@@ -42,6 +48,9 @@ impl ConfigKey {
             Self::GofileServer => "gofile.server",
             Self::FilesterToken => "filester.token",
             Self::FilesterFolderId => "filester.folder_id",
+            Self::GoonboxUsername => "goonbox.username",
+            Self::GoonboxPassword => "goonbox.password",
+            Self::GoonboxFolderId => "goonbox.folder_id",
         }
     }
 
@@ -50,7 +59,7 @@ impl ConfigKey {
     pub const fn is_secret(self) -> bool {
         matches!(
             self,
-            Self::BunkrToken | Self::GofileToken | Self::FilesterToken
+            Self::BunkrToken | Self::GofileToken | Self::FilesterToken | Self::GoonboxPassword
         )
     }
 
@@ -65,6 +74,9 @@ impl ConfigKey {
             Self::GofileServer => server_of(&config.gofile),
             Self::FilesterToken => token_of(&config.filester),
             Self::FilesterFolderId => folder_id_of(&config.filester),
+            Self::GoonboxUsername => text_of(&config.goonbox, |c| c.username.as_deref()),
+            Self::GoonboxPassword => text_of(&config.goonbox, |c| c.password.as_deref()),
+            Self::GoonboxFolderId => folder_id_of(&config.goonbox),
         }
     }
 
@@ -94,6 +106,9 @@ impl ConfigKey {
             Self::GofileServer => endpoint(&mut config.gofile).server = opt(value),
             Self::FilesterToken => endpoint(&mut config.filester).token = opt(value),
             Self::FilesterFolderId => endpoint(&mut config.filester).folder_id = opt(value),
+            Self::GoonboxUsername => endpoint(&mut config.goonbox).username = opt(value),
+            Self::GoonboxPassword => endpoint(&mut config.goonbox).password = opt(value),
+            Self::GoonboxFolderId => endpoint(&mut config.goonbox).folder_id = opt(value),
         }
         Ok(())
     }
@@ -117,6 +132,14 @@ fn folder_id_of(section: &Option<UploaderEndpointConfig>) -> String {
         .and_then(|c| c.folder_id.as_deref())
         .unwrap_or_default()
         .to_string()
+}
+
+fn text_of(
+    section: &Option<UploaderEndpointConfig>,
+    field: impl Fn(&UploaderEndpointConfig) -> Option<&str>,
+) -> String {
+    let value = section.as_ref().and_then(field);
+    value.unwrap_or_default().to_string()
 }
 
 fn server_of(section: &Option<UploaderEndpointConfig>) -> String {

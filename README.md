@@ -12,8 +12,14 @@ Currently supported services:
 | GoFile.io   | `uploader-gofile`    | No\*  | Yes            |
 | Fileditch   | `uploader-fileditch` | No    | No             |
 | Filester.me | `uploader-filester`  | Yes   | Yes            |
+| GoonBox     | `uploader-goonbox`   | No    | Yes            |
 
 \* Optional. Anonymous uploads work without one, a token raises the size limit and unlocks folder management.
+
+GoonBox signs in with an account rather than a token, and its login is gated by
+a Cloudflare challenge. upio solves that challenge with a real Chrome the first
+time it is needed, so no credential beyond the username and password is
+required.
 
 ## Quick start
 
@@ -71,7 +77,7 @@ upio upload -u bunkr -b 4 video-*.mp4
 | ------------------- | ------------------------------------------------------------------------------------------------ |
 | `-u, --uploaders`   | Services to use. Repeatable; repeated names are deduplicated; defaults to `bunkr`.               |
 | `-f, --folder-id`   | Destination folder/album ID.                                                                     |
-| `-n, --folder-name` | Folder/album name; resolved by name, creating it if it does not exist (Bunkr, GoFile, Filester). |
+| `-n, --folder-name` | Folder/album name; resolved by name, creating it if it does not exist (Bunkr, GoFile, Filester, GoonBox). |
 | `-b, --batch-size`  | Maximum concurrent uploads; sequential when unset.                                               |
 | `-g, --glob`        | Extra glob patterns to match (e.g. `'**/*.mp4'`).                                                |
 
@@ -161,6 +167,11 @@ server = "store4"           # optional; auto-selected when unset
 token = "…"
 folder_id = "…"
 
+[goonbox]
+username = "…"              # required; no token exists for this service
+password = "…"              # required; masked in output like a token
+folder_id = "…"             # an album's encoded_id
+
 # Per-service preprocessing lives under e.g. [bunkr.preprocess]; see below.
 ```
 
@@ -231,7 +242,7 @@ available.
 
 Use the `upio` crate to upload from your own Rust program. The crate re-exports
 every service; feature flags control which ones are compiled in
-(`default = ["bunkr", "gofile", "fileditch", "filester"]`).
+(`default = ["bunkr", "gofile", "fileditch", "filester", "goonbox"]`).
 
 ```toml
 [dependencies]
@@ -279,6 +290,11 @@ Constructors are synchronous. Network setup happens in `init()`:
 - `GoFileUploader::new()` or `GoFileUploader::with_token(token)`, token optional.
 - `FileditchUploader::new()`, no token.
 - `FilesterUploader::new()` or `FilesterUploader::with_token(token)`, token optional.
+- `GoonboxUploader::new(username, password)`. No token: GoonBox has no
+  browser-free write API, so `init()` signs in and solves the site's
+  Cloudflare challenge with a real Chrome. On a headless Linux server,
+  install Xvfb (`apt install xvfb`); upio starts it automatically when
+  `DISPLAY` is unset.
 
 Uploaders declare what they accept via `capabilities()` (video, image, audio,
 archives, arbitrary files) and their maximum file size via `max_file_size()`;
@@ -287,8 +303,8 @@ both drive preprocessing. The `Uploader` trait also exposes
 and creates it when it does not exist. The `config` argument supplies per-call
 settings such as a token that differs from the one the uploader was built
 with; GoFile and Filester fall back from `config.token` to their own stored
-credential. Bunkr, GoFile, and Filester implement folder resolution; others
-report no folder support.
+credential. Bunkr, GoFile, Filester, and GoonBox implement folder resolution;
+others report no folder support.
 
 When you don't want to construct an uploader by hand, use the `upio::registry`
 module. It is the single source of truth for known uploaders: `UploaderId`
@@ -322,6 +338,7 @@ controls are reachable by keyboard.
 | `crates/uploader-gofile`    | GoFile.io implementation.                                                       |
 | `crates/uploader-fileditch` | Fileditch implementation.                                                       |
 | `crates/uploader-filester`  | Filester.me implementation.                                                     |
+| `crates/uploader-goonbox`    | GoonBox implementation, including the Turnstile solver.                           |
 | `crates/upio`               | Unified library: feature flags, the upload pipeline, and the uploader registry. |
 | `crates/config`             | Config model, layered env/file reader, typed keys, and atomic writes.           |
 | `crates/cli`                | The `upio` command-line binary.                                                 |

@@ -6,11 +6,12 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["bunkr", "gofile", "fileditch", "filester"]
+default = ["bunkr", "gofile", "fileditch", "filester", "goonbox"]
 bunkr = ["dep:uploader-bunkr"]
 gofile = ["dep:uploader-gofile"]
 fileditch = ["dep:uploader-fileditch"]
 filester = ["dep:uploader-filester"]
+goonbox = ["dep:uploader-goonbox"]
 
 [dependencies]
 upio-core = { workspace = true }
@@ -18,6 +19,7 @@ uploader-bunkr = { workspace = true, optional = true }
 uploader-gofile = { workspace = true, optional = true }
 uploader-fileditch = { workspace = true, optional = true }
 uploader-filester = { workspace = true, optional = true }
+uploader-goonbox = { workspace = true, optional = true }
 futures = { workspace = true }
 
 [dev-dependencies]

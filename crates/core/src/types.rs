@@ -24,6 +24,10 @@ use crate::preprocess::PreprocessConfig;
 pub struct UploaderEndpointConfig {
     /// Authentication token for the service.
     pub token: Option<String>,
+    /// Account name, for services that sign in rather than use a token.
+    pub username: Option<String>,
+    /// Account password, for services that sign in rather than use a token.
+    pub password: Option<String>,
     /// Destination folder / album ID.
     pub folder_id: Option<String>,
     /// Specific server to use (service-dependent); auto-selected when unset.

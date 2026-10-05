@@ -32,6 +32,31 @@ fn build_bunkr_without_token_fails() {
 }
 
 #[test]
+fn build_goonbox_without_credentials_fails() {
+    let id = UploaderId::from_name("goonbox").unwrap();
+    let err = match build_uploader(id, &UploaderEndpointConfig::default()) {
+        Ok(_) => panic!("goonbox built without a username"),
+        Err(e) => e,
+    };
+    assert!(matches!(err, BuildError::MissingToken(_)));
+}
+
+#[test]
+fn build_goonbox_with_credentials_succeeds() {
+    let id = UploaderId::from_name("goonbox").unwrap();
+    let config = UploaderEndpointConfig {
+        username: Some("user".to_string()),
+        password: Some("pass".to_string()),
+        ..Default::default()
+    };
+    let uploader = match build_uploader(id, &config) {
+        Ok(uploader) => uploader,
+        Err(e) => panic!("build failed: {}", e),
+    };
+    assert_eq!(uploader.name(), "goonbox");
+}
+
+#[test]
 fn build_fileditch_requires_no_token() {
     let id = UploaderId::from_name("fileditch").unwrap();
     let config = UploaderEndpointConfig::default();
