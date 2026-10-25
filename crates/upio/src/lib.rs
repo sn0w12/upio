@@ -13,6 +13,7 @@
 //! let result = pipeline::upload_file(&files[0], &uploader, &config).await;
 //! ```
 
+pub mod docs;
 pub mod pipeline;
 pub mod registry;
 

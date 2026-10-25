@@ -32,6 +32,31 @@ pub enum UploaderId {
     Pixeldrain,
 }
 
+/// How a service authenticates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Credential {
+    /// A token is required.
+    Token,
+    /// Anonymous uploads work; a token unlocks extra functionality.
+    OptionalToken,
+    /// A username and password replace the token.
+    Account,
+    /// No credentials are needed.
+    None,
+}
+
+/// Static, human-facing facts about a service.
+///
+/// Capabilities and size limits are not here: those live on the uploader
+/// implementations and can change at runtime.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UploaderInfo {
+    pub display_name: &'static str,
+    pub crate_name: &'static str,
+    pub credential: Credential,
+    pub supports_folders: bool,
+}
+
 impl UploaderId {
     /// Every known uploader in a stable order.
     pub const ALL: &'static [UploaderId] = &[
@@ -64,6 +89,54 @@ impl UploaderId {
             UploaderId::Goonbox => "goonbox",
             #[cfg(feature = "pixeldrain")]
             UploaderId::Pixeldrain => "pixeldrain",
+        }
+    }
+
+    /// Human-facing details for docs and settings screens.
+    pub const fn info(self) -> UploaderInfo {
+        match self {
+            #[cfg(feature = "bunkr")]
+            UploaderId::Bunkr => UploaderInfo {
+                display_name: "Bunkr.cr",
+                crate_name: "uploader-bunkr",
+                credential: Credential::Token,
+                supports_folders: true,
+            },
+            #[cfg(feature = "gofile")]
+            UploaderId::Gofile => UploaderInfo {
+                display_name: "GoFile.io",
+                crate_name: "uploader-gofile",
+                credential: Credential::OptionalToken,
+                supports_folders: true,
+            },
+            #[cfg(feature = "fileditch")]
+            UploaderId::Fileditch => UploaderInfo {
+                display_name: "Fileditch",
+                crate_name: "uploader-fileditch",
+                credential: Credential::None,
+                supports_folders: false,
+            },
+            #[cfg(feature = "filester")]
+            UploaderId::Filester => UploaderInfo {
+                display_name: "Filester.me",
+                crate_name: "uploader-filester",
+                credential: Credential::Token,
+                supports_folders: true,
+            },
+            #[cfg(feature = "goonbox")]
+            UploaderId::Goonbox => UploaderInfo {
+                display_name: "GoonBox",
+                crate_name: "uploader-goonbox",
+                credential: Credential::Account,
+                supports_folders: true,
+            },
+            #[cfg(feature = "pixeldrain")]
+            UploaderId::Pixeldrain => UploaderInfo {
+                display_name: "Pixeldrain",
+                crate_name: "uploader-pixeldrain",
+                credential: Credential::Token,
+                supports_folders: true,
+            },
         }
     }
 

@@ -109,7 +109,7 @@ pub(crate) fn wrap_zip(
 pub(crate) static DEF: super::StrategyDef = super::StrategyDef {
     id: "wrap_zip",
     name: "Wrap in zip",
-    description: "Wrap the file into a compressed zip archive (useful for text and log files). Skips images and videos.",
+    description: "Wrap the file in a compressed zip (useful for text and log files). Skips images and videos.",
     match_types: &["*/*"],
     excluded_types: &["image/*", "video/*"],
     trigger: super::RuleTrigger::Always,

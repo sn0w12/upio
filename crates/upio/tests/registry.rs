@@ -21,6 +21,26 @@ fn unknown_name_resolves_to_none() {
 }
 
 #[test]
+fn every_id_has_distinct_info() {
+    let mut crate_names = std::collections::HashSet::new();
+
+    for id in UploaderId::ALL {
+        let info = id.info();
+        assert!(
+            !info.display_name.is_empty(),
+            "{} has no display name",
+            id.name()
+        );
+        assert!(
+            crate_names.insert(info.crate_name),
+            "{} reuses crate name '{}'",
+            id.name(),
+            info.crate_name
+        );
+    }
+}
+
+#[test]
 fn build_bunkr_without_token_fails() {
     let id = UploaderId::from_name("bunkr").unwrap();
     let config = UploaderEndpointConfig::default();

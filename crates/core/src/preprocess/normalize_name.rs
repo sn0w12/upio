@@ -143,7 +143,7 @@ fn sanitize(input: &str, replacement: &str) -> String {
 pub(crate) static DEF: super::StrategyDef = super::StrategyDef {
     id: "normalize_name",
     name: "Normalize name",
-    description: "Sanitize file names (spaces, unicode, invalid characters); the original file is never modified.",
+    description: "Sanitize the file name (spaces, unicode, invalid characters); length-capped, Unicode-safe. The original file is never modified.",
     match_types: &["*/*"],
     excluded_types: &[],
     trigger: super::RuleTrigger::Always,

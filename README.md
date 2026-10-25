@@ -6,16 +6,18 @@ files fit the target service's limits. A desktop GUI is also included.
 
 Currently supported services:
 
-| Service     | Crate                | Token | Folder / album |
-| ----------- | -------------------- | ----- | -------------- |
-| Bunkr.cr    | `uploader-bunkr`     | Yes   | Yes            |
-| GoFile.io   | `uploader-gofile`    | No\*  | Yes            |
-| Fileditch   | `uploader-fileditch` | No    | No             |
-| Filester.me | `uploader-filester`  | Yes   | Yes            |
-| GoonBox     | `uploader-goonbox`   | No    | Yes            |
-| Pixeldrain  | `uploader-pixeldrain`| Yes   | Yes            |
+<!-- BEGIN generated: services -->
+| Service     | Crate                 | Token Required | Folder / album | Capabilities |
+| ----------- | --------------------- | -------------- | -------------- | ------------ |
+| Bunkr.cr    | `uploader-bunkr`      | Yes            | Yes            | All          |
+| GoFile.io   | `uploader-gofile`     | No\*           | Yes            | All          |
+| Fileditch   | `uploader-fileditch`  | No             | No             | All          |
+| Filester.me | `uploader-filester`   | Yes            | Yes            | All          |
+| GoonBox     | `uploader-goonbox`    | No             | Yes            | Image        |
+| Pixeldrain  | `uploader-pixeldrain` | Yes            | Yes            | All          |
 
-\* Optional. Anonymous uploads work without one, a token raises the size limit and unlocks folder management.
+\* Optional. Anonymous uploads work without one, however some functionality may be locked behind the token.
+<!-- END generated: services -->
 
 GoonBox signs in with an account rather than a token, and its login is gated by
 a Cloudflare challenge. upio solves that challenge with a real Chrome the first
@@ -79,13 +81,13 @@ upio upload -u bunkr -n "My Album" video.mp4   # found or created by name
 upio upload -u bunkr -b 4 video-*.mp4
 ```
 
-| Flag                | Description                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------ |
-| `-u, --uploaders`   | Services to use. Repeatable; repeated names are deduplicated; defaults to `bunkr`.               |
-| `-f, --folder-id`   | Destination folder/album ID.                                                                     |
+| Flag                | Description                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `-u, --uploaders`   | Services to use. Repeatable; repeated names are deduplicated; defaults to `bunkr`.                                    |
+| `-f, --folder-id`   | Destination folder/album ID.                                                                                          |
 | `-n, --folder-name` | Folder/album name; resolved by name, creating it if it does not exist (Bunkr, GoFile, Filester, GoonBox, Pixeldrain). |
-| `-b, --batch-size`  | Maximum concurrent uploads; sequential when unset.                                               |
-| `-g, --glob`        | Extra glob patterns to match (e.g. `'**/*.mp4'`).                                                |
+| `-b, --batch-size`  | Maximum concurrent uploads; sequential when unset.                                                                    |
+| `-g, --glob`        | Extra glob patterns to match (e.g. `'**/*.mp4'`).                                                                     |
 
 Glob patterns support `*`, `?`, `**` across directories, and `[...]` character
 classes (single characters, `a-z` ranges, negation with a leading `!` or `^`).
@@ -163,9 +165,9 @@ token = "…"
 folder_id = "…"
 
 [gofile]
-token = "…"                 # optional; anonymous uploads work without it
+token = "…" # optional; anonymous uploads work without it
 folder_id = "…"
-server = "store4"           # optional; auto-selected when unset
+server = "store4" # optional; auto-selected when unset
 
 [fileditch]
 
@@ -174,13 +176,13 @@ token = "…"
 folder_id = "…"
 
 [goonbox]
-username = "…"              # required; no token exists for this service
-password = "…"              # required; masked in output like a token
-folder_id = "…"             # an album's encoded_id
+username = "…" # required; no token exists for this service
+password = "…" # required; masked in output like a token
+folder_id = "…" # an album's encoded_id
 
 [pixeldrain]
-token = "…"                 # required; see the API keys page
-folder_id = "…"             # a list's id
+token = "…" # required; see the API keys page
+folder_id = "…" # a list's id
 
 # Per-service preprocessing lives under e.g. [bunkr.preprocess]; see below.
 ```
@@ -237,12 +239,14 @@ the upload's URLs are preserved but the result reports the cleanup error.
 
 Strategies run in this canonical chain order:
 
-| #   | Strategy         | Trigger      | What it does                                                                                                                    | Requirements                   |
-| --- | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| 1   | `normalize_name` | Always       | Sanitize the file name (spaces, unicode, invalid characters); length-capped, Unicode-safe. The original file is never modified. | None                           |
-| 2   | `compress_image` | If oversized | Re-encode and/or resize images. Output `jpeg` or `png`.                                                                         | None (pure Rust)               |
-| 3   | `wrap_zip`       | Always       | Wrap the file in a compressed `.zip` (useful for text/log files). Skips images and videos.                                      | None (pure Rust)               |
-| 4   | `split_video`    | If oversized | Split a video into independently playable segments via ffmpeg.                                                                  | `ffmpeg` + `ffprobe` on `PATH` |
+<!-- BEGIN generated: strategies -->
+| #   | Strategy         | Trigger      | What it does                                                                                                                    | Requirements               |
+| --- | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| 1   | `normalize_name` | Always       | Sanitize the file name (spaces, unicode, invalid characters); length-capped, Unicode-safe. The original file is never modified. | None (pure Rust)           |
+| 2   | `compress_image` | If oversized | Re-encode and/or resize images; outputs jpeg or png.                                                                            | None (pure Rust)           |
+| 3   | `wrap_zip`       | Always       | Wrap the file in a compressed zip (useful for text and log files). Skips images and videos.                                     | None (pure Rust)           |
+| 4   | `split_video`    | If oversized | Split a video into independently playable segments via ffmpeg and ffprobe.                                                      | ffmpeg + ffprobe on `PATH` |
+<!-- END generated: strategies -->
 
 When a strategy needs an external tool that is missing, the rule is skipped
 rather than failing the upload. Use `upio preprocess check` to see what is
@@ -343,19 +347,19 @@ controls are reachable by keyboard.
 
 ## Workspace layout
 
-| Crate                       | Purpose                                                                         |
-| --------------------------- | ------------------------------------------------------------------------------- |
-| `crates/core`               | Shared types, traits, error handling, HTTP helpers, and preprocessing.          |
-| `crates/uploader-bunkr`     | Bunkr.cr implementation.                                                        |
-| `crates/uploader-gofile`    | GoFile.io implementation.                                                       |
-| `crates/uploader-fileditch` | Fileditch implementation.                                                       |
-| `crates/uploader-filester`  | Filester.me implementation.                                                     |
-| `crates/uploader-goonbox`    | GoonBox implementation, including the Turnstile solver.                           |
-| `crates/uploader-pixeldrain` | Pixeldrain implementation; lists are used as folders.                              |
-| `crates/upio`               | Unified library: feature flags, the upload pipeline, and the uploader registry. |
-| `crates/config`             | Config model, layered env/file reader, typed keys, and atomic writes.           |
-| `crates/cli`                | The `upio` command-line binary.                                                 |
-| `crates/gui`                | The `upio-gui` Dioxus desktop app.                                              |
+| Crate                        | Purpose                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| `crates/core`                | Shared types, traits, error handling, HTTP helpers, and preprocessing.          |
+| `crates/uploader-bunkr`      | Bunkr.cr implementation.                                                        |
+| `crates/uploader-gofile`     | GoFile.io implementation.                                                       |
+| `crates/uploader-fileditch`  | Fileditch implementation.                                                       |
+| `crates/uploader-filester`   | Filester.me implementation.                                                     |
+| `crates/uploader-goonbox`    | GoonBox implementation, including the Turnstile solver.                         |
+| `crates/uploader-pixeldrain` | Pixeldrain implementation; lists are used as folders.                           |
+| `crates/upio`                | Unified library: feature flags, the upload pipeline, and the uploader registry. |
+| `crates/config`              | Config model, layered env/file reader, typed keys, and atomic writes.           |
+| `crates/cli`                 | The `upio` command-line binary.                                                 |
+| `crates/gui`                 | The `upio-gui` Dioxus desktop app.                                              |
 
 Versioning: `upio-core`, the per-service `uploader-*` crates, and the `upio`
 crate are released together from the workspace version. The `upio-config` and
@@ -371,6 +375,15 @@ cargo fmt --all -- --check
 ```
 
 CI runs the same checks plus `cargo check -p upio --no-default-features`.
+
+The services and strategies tables above are generated from the code. After
+adding an uploader or preprocessing strategy, regenerate them:
+
+```sh
+cargo run -p upio --example readme
+```
+
+`cargo test -p upio` fails when the README and the code disagree.
 
 Build an optimized binary (release profile is configured in the workspace root):
 

@@ -231,7 +231,7 @@ fn fit_dimensions(w: u32, h: u32, cap: Dimensions) -> (u32, u32) {
 pub(crate) static DEF: super::StrategyDef = super::StrategyDef {
     id: "compress_image",
     name: "Compress image",
-    description: "Re-encode and resize images so they fit the service limit.",
+    description: "Re-encode and/or resize images; outputs jpeg or png.",
     match_types: &["image/*"],
     excluded_types: &[],
     trigger: super::RuleTrigger::IfOversized,

@@ -11,6 +11,10 @@ fmt:
 fmt-check:
     cargo fmt --all -- --check
 
+# Regenerate the README tables from the code
+readme:
+    cargo run -p upio --example readme
+
 # Run clippy on the whole workspace with all targets/features (like CI)
 clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
