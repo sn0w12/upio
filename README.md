@@ -19,16 +19,6 @@ Currently supported services:
 \* Optional. Anonymous uploads work without one, however some functionality may be locked behind the token.
 <!-- END generated: services -->
 
-GoonBox signs in with an account rather than a token, and its login is gated by
-a Cloudflare challenge. upio solves that challenge with a real Chrome the first
-time it is needed, so no credential beyond the username and password is
-required.
-
-Pixeldrain has no anonymous uploads, so it needs an API key from
-[pixeldrain.com/user/api_keys](https://pixeldrain.com/user/api_keys). Its
-folders are lists; a list cannot be created empty, so a `-n` folder appears
-once something has been uploaded into it.
-
 ## Quick start
 
 Build and run the CLI from the repo:
