@@ -337,19 +337,14 @@ controls are reachable by keyboard.
 
 ## Workspace layout
 
-| Crate                        | Purpose                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------- |
-| `crates/core`                | Shared types, traits, error handling, HTTP helpers, and preprocessing.          |
-| `crates/uploader-bunkr`      | Bunkr.cr implementation.                                                        |
-| `crates/uploader-gofile`     | GoFile.io implementation.                                                       |
-| `crates/uploader-fileditch`  | Fileditch implementation.                                                       |
-| `crates/uploader-filester`   | Filester.me implementation.                                                     |
-| `crates/uploader-goonbox`    | GoonBox implementation, including the Turnstile solver.                         |
-| `crates/uploader-pixeldrain` | Pixeldrain implementation; lists are used as folders.                           |
-| `crates/upio`                | Unified library: feature flags, the upload pipeline, and the uploader registry. |
-| `crates/config`              | Config model, layered env/file reader, typed keys, and atomic writes.           |
-| `crates/cli`                 | The `upio` command-line binary.                                                 |
-| `crates/gui`                 | The `upio-gui` Dioxus desktop app.                                              |
+| Crate                     | Purpose                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------- |
+| `crates/core`             | Shared types, traits, error handling, HTTP helpers, and preprocessing.          |
+| `crates/uploader-*bunkr*` | Uploader implementations.                                                       |
+| `crates/upio`             | Unified library: feature flags, the upload pipeline, and the uploader registry. |
+| `crates/config`           | Config model, layered env/file reader, typed keys, and atomic writes.           |
+| `crates/cli`              | The `upio` command-line binary.                                                 |
+| `crates/gui`              | The `upio-gui` Dioxus desktop app.                                              |
 
 Versioning: `upio-core`, the per-service `uploader-*` crates, and the `upio`
 crate are released together from the workspace version. The `upio-config` and
