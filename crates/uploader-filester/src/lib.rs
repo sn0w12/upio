@@ -4,7 +4,10 @@ use serde::Deserialize;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_reqwest_error, parse_json_response, tracked_file_part};
-use upio_core::types::{UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig};
+use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::types::{
+    BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
+};
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
@@ -58,6 +61,7 @@ pub struct FilesterUploader {
 }
 
 impl FilesterUploader {
+    pub const NAME: &str = "filester";
     pub const CAPABILITIES: UploaderCapabilities = UploaderCapabilities::any();
     pub const MAX_FILE_SIZE: FileSize = FileSize::from_gb(10);
 
@@ -257,7 +261,7 @@ impl Uploader for FilesterUploader {
     }
 
     fn name(&self) -> &str {
-        "filester"
+        Self::NAME
     }
 
     fn capabilities(&self) -> UploaderCapabilities {
@@ -271,4 +275,22 @@ impl Uploader for FilesterUploader {
     async fn is_ready(&self) -> bool {
         true
     }
+}
+
+pub static FILESTER_SERVICE: ServiceDef = ServiceDef {
+    name: FilesterUploader::NAME,
+    display_name: "Filester.me",
+    crate_name: env!("CARGO_PKG_NAME"),
+    credential: Credential::OptionalToken,
+    supports_folders: true,
+    capabilities: FilesterUploader::CAPABILITIES,
+    max_file_size: FilesterUploader::MAX_FILE_SIZE,
+    build,
+};
+
+fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
+    Ok(Box::new(match config.token.as_deref() {
+        Some(token) => FilesterUploader::with_token(token),
+        None => FilesterUploader::new(),
+    }))
 }

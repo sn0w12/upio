@@ -3,7 +3,7 @@ use std::time::Duration;
 use dioxus::prelude::*;
 use dioxus_icons::lucide::{Eye, EyeOff};
 use tw_merge::*;
-use upio::registry::UploaderId;
+use upio::registry::{Credential, UploaderId};
 use upio_config::ConfigKey;
 
 use crate::components::ui::badge::{Badge, BadgeVariant};
@@ -18,7 +18,7 @@ use crate::utils::format_size;
 /// The Services tab: enable services and edit their endpoint settings.
 #[component]
 pub fn ServicesTab() -> Element {
-    let selected = use_signal(|| Some(UploaderId::Bunkr));
+    let selected = use_signal(|| Some(UploaderId::ALL[0]));
 
     rsx! {
         div { class: "flex gap-6 flex-row",
@@ -90,14 +90,14 @@ fn ServiceDetail(id: UploaderId) -> Element {
 
             EnabledRow { id, enabled }
 
-            match id {
-                UploaderId::Fileditch => rsx! {
-                    p { class: "text-sm text-muted-foreground", "Fileditch needs no configuration and accepts any file." }
+            match id.def().credential {
+                Credential::None => rsx! {
+                    p { class: "text-sm text-muted-foreground", "{id.def().display_name} needs no configuration." }
                 },
-                UploaderId::Goonbox => rsx! {
+                Credential::Account => rsx! {
                     GoonboxFields {}
                 },
-                _ => rsx! {
+                Credential::Token | Credential::OptionalToken => rsx! {
                     div { class: "flex flex-col gap-5",
                         ConfigInput {
                             config_key: token_key(id).expect("token field only for tokened services"),
@@ -106,7 +106,7 @@ fn ServiceDetail(id: UploaderId) -> Element {
                             placeholder: token_placeholder(id),
                             password: true,
                         }
-                        if id == UploaderId::Gofile {
+                        if id.name() == "gofile" {
                             ConfigInput {
                                 config_key: ConfigKey::GofileServer,
                                 label: "Server",
@@ -123,36 +123,33 @@ fn ServiceDetail(id: UploaderId) -> Element {
 }
 
 fn token_key(id: UploaderId) -> Option<ConfigKey> {
-    match id {
-        UploaderId::Bunkr => Some(ConfigKey::BunkrToken),
-        UploaderId::Gofile => Some(ConfigKey::GofileToken),
-        UploaderId::Filester => Some(ConfigKey::FilesterToken),
-        UploaderId::Pixeldrain => Some(ConfigKey::PixeldrainToken),
+    match id.name() {
+        "bunkr" => Some(ConfigKey::BunkrToken),
+        "gofile" => Some(ConfigKey::GofileToken),
+        "filester" => Some(ConfigKey::FilesterToken),
+        "pixeldrain" => Some(ConfigKey::PixeldrainToken),
         // Fileditch needs no token; the GUI renders no field for it.
-        UploaderId::Fileditch => None,
-        UploaderId::Goonbox => None,
+        _ => None,
     }
 }
 
 fn token_description(id: UploaderId) -> &'static str {
-    match id {
-        UploaderId::Bunkr => "Required. Create one in your Bunkr account settings.",
-        UploaderId::Gofile => "Optional. Raises the size limit and unlocks folders.",
-        UploaderId::Filester => "Optional.",
-        UploaderId::Pixeldrain => "Required. Create one on your Pixeldrain API keys page.",
-        UploaderId::Fileditch => "",
-        UploaderId::Goonbox => "",
+    match id.name() {
+        "bunkr" => "Required. Create one in your Bunkr account settings.",
+        "gofile" => "Optional. Raises the size limit and unlocks folders.",
+        "filester" => "Optional.",
+        "pixeldrain" => "Required. Create one on your Pixeldrain API keys page.",
+        _ => "",
     }
 }
 
 fn token_placeholder(id: UploaderId) -> &'static str {
-    match id {
-        UploaderId::Bunkr => "Paste your Bunkr token",
-        UploaderId::Gofile => "Paste your GoFile token",
-        UploaderId::Filester => "Paste your Filester token",
-        UploaderId::Pixeldrain => "Paste your Pixeldrain API key",
-        UploaderId::Fileditch => "",
-        UploaderId::Goonbox => "",
+    match id.name() {
+        "bunkr" => "Paste your Bunkr token",
+        "gofile" => "Paste your GoFile token",
+        "filester" => "Paste your Filester token",
+        "pixeldrain" => "Paste your Pixeldrain API key",
+        _ => "",
     }
 }
 

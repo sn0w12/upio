@@ -20,7 +20,10 @@ use tokio::sync::RwLock;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_reqwest_error, tracked_file_part};
-use upio_core::types::{UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig};
+use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::types::{
+    BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
+};
 
 use login::{Credentials, Session, XSRF_HEADER};
 
@@ -86,6 +89,7 @@ pub struct GoonboxUploader {
 }
 
 impl GoonboxUploader {
+    pub const NAME: &str = "goonbox";
     pub const CAPABILITIES: UploaderCapabilities = UploaderCapabilities {
         image: true,
         ..UploaderCapabilities::none()
@@ -270,7 +274,7 @@ impl Uploader for GoonboxUploader {
     }
 
     fn name(&self) -> &str {
-        "goonbox"
+        Self::NAME
     }
 
     fn capabilities(&self) -> UploaderCapabilities {
@@ -415,6 +419,30 @@ pub(crate) fn error_from_value(value: &Value, status_code: u16, fallback: &str) 
             .unwrap_or_else(|| fallback.to_string()),
         status_code: Some(status_code),
     }
+}
+
+pub static GOONBOX_SERVICE: ServiceDef = ServiceDef {
+    name: GoonboxUploader::NAME,
+    display_name: "GoonBox",
+    crate_name: env!("CARGO_PKG_NAME"),
+    credential: Credential::Account,
+    supports_folders: true,
+    capabilities: GoonboxUploader::CAPABILITIES,
+    max_file_size: GoonboxUploader::MAX_FILE_SIZE,
+    build,
+};
+
+fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
+    let username = config.username.as_deref().unwrap_or_default();
+    let password = config.password.as_deref().unwrap_or_default();
+    if username.is_empty() || password.is_empty() {
+        return Err(BuildError::MissingCredential(
+            "goonbox needs a username and password (set goonbox.username and goonbox.password, \
+             or UPIO_GOONBOX_USERNAME and UPIO_GOONBOX_PASSWORD)"
+                .to_string(),
+        ));
+    }
+    Ok(Box::new(GoonboxUploader::new(username, password)))
 }
 
 #[cfg(test)]

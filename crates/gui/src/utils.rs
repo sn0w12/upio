@@ -5,14 +5,7 @@ use upio::registry::UploaderId;
 
 /// The display name for a service (config keys stay lowercase).
 pub fn service_display_name(id: UploaderId) -> &'static str {
-    match id {
-        UploaderId::Bunkr => "Bunkr",
-        UploaderId::Gofile => "GoFile",
-        UploaderId::Fileditch => "Fileditch",
-        UploaderId::Filester => "Filester",
-        UploaderId::Goonbox => "GoonBox",
-        UploaderId::Pixeldrain => "Pixeldrain",
-    }
+    id.def().display_name
 }
 
 /// Copy text to the system clipboard.

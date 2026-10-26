@@ -201,13 +201,14 @@ fn detect_overridden(effective: &Config, file: &Config) -> HashSet<&'static str>
 }
 
 fn endpoint_of(config: &mut Config, id: UploaderId) -> &mut UploaderEndpointConfig {
-    let section = match id {
-        UploaderId::Bunkr => &mut config.bunkr,
-        UploaderId::Gofile => &mut config.gofile,
-        UploaderId::Fileditch => &mut config.fileditch,
-        UploaderId::Filester => &mut config.filester,
-        UploaderId::Goonbox => &mut config.goonbox,
-        UploaderId::Pixeldrain => &mut config.pixeldrain,
+    let section = match id.name() {
+        "bunkr" => &mut config.bunkr,
+        "gofile" => &mut config.gofile,
+        "fileditch" => &mut config.fileditch,
+        "filester" => &mut config.filester,
+        "goonbox" => &mut config.goonbox,
+        "pixeldrain" => &mut config.pixeldrain,
+        other => unreachable!("no config section for uploader '{other}'"),
     };
     section.get_or_insert_with(Default::default)
 }

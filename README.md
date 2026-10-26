@@ -7,16 +7,16 @@ files fit the target service's limits. A desktop GUI is also included.
 Currently supported services:
 
 <!-- BEGIN generated: services -->
-| Service     | Crate                 | Token Required | Folder / album | Capabilities |
-| ----------- | --------------------- | -------------- | -------------- | ------------ |
-| Bunkr.cr    | `uploader-bunkr`      | Yes            | Yes            | All          |
-| GoFile.io   | `uploader-gofile`     | No\*           | Yes            | All          |
-| Fileditch   | `uploader-fileditch`  | No             | No             | All          |
-| Filester.me | `uploader-filester`   | Yes            | Yes            | All          |
-| GoonBox     | `uploader-goonbox`    | No             | Yes            | Image        |
-| Pixeldrain  | `uploader-pixeldrain` | Yes            | Yes            | All          |
+| Service     | Crate                 | Auth Required | Folder / album | Capabilities |
+| ----------- | --------------------- | ------------- | -------------- | ------------ |
+| Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | All          |
+| GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | All          |
+| Fileditch   | `uploader-fileditch`  | No            | No             | All          |
+| Filester.me | `uploader-filester`   | Optional\*    | Yes            | All          |
+| GoonBox     | `uploader-goonbox`    | Yes           | Yes            | Image        |
+| Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | All          |
 
-\* Optional. Anonymous uploads work without one, however some functionality may be locked behind the token.
+\* Optional. Anonymous uploads work without auth, however some functionality may be locked behind it.
 <!-- END generated: services -->
 
 ## Quick start

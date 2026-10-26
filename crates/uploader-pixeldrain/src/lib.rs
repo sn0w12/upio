@@ -20,7 +20,10 @@ use serde_json::Value;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_io_error, map_reqwest_error};
-use upio_core::types::{UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig};
+use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::types::{
+    BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
+};
 
 const BASE_URL: &str = "https://pixeldrain.com";
 const FILE_API: &str = "https://pixeldrain.com/api/file";
@@ -75,6 +78,7 @@ pub struct PixeldrainUploader {
 }
 
 impl PixeldrainUploader {
+    pub const NAME: &str = "pixeldrain";
     pub const CAPABILITIES: UploaderCapabilities = UploaderCapabilities::any();
 
     /// The free plan reports a 10 GB per-file limit, and the API refuses
@@ -437,7 +441,7 @@ impl Uploader for PixeldrainUploader {
     }
 
     fn name(&self) -> &str {
-        "pixeldrain"
+        Self::NAME
     }
 
     fn capabilities(&self) -> UploaderCapabilities {
@@ -492,6 +496,26 @@ impl PixeldrainUploader {
         eprintln!("pixeldrain: created list '{folder}' as {list_id}");
         Ok(())
     }
+}
+
+pub static PIXELDRAIN_SERVICE: ServiceDef = ServiceDef {
+    name: PixeldrainUploader::NAME,
+    display_name: "Pixeldrain",
+    crate_name: env!("CARGO_PKG_NAME"),
+    credential: Credential::Token,
+    supports_folders: true,
+    capabilities: PixeldrainUploader::CAPABILITIES,
+    max_file_size: PixeldrainUploader::MAX_FILE_SIZE,
+    build,
+};
+
+fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
+    let token = config
+        .token
+        .as_deref()
+        .filter(|token| !token.trim().is_empty())
+        .ok_or_else(|| BuildError::missing_token(PixeldrainUploader::NAME))?;
+    Ok(Box::new(PixeldrainUploader::with_token(token)))
 }
 
 #[cfg(test)]

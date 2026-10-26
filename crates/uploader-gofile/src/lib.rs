@@ -4,7 +4,10 @@ use serde::Deserialize;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_reqwest_error, parse_json_response, tracked_file_part};
-use upio_core::types::{UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig};
+use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::types::{
+    BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
+};
 
 const SERVERS_URL: &str = "https://api.gofile.io/servers";
 const CONTENT_URL: &str = "https://api.gofile.io/contents";
@@ -86,6 +89,7 @@ pub struct GoFileUploader {
 }
 
 impl GoFileUploader {
+    pub const NAME: &str = "gofile";
     pub const CAPABILITIES: UploaderCapabilities = UploaderCapabilities::any();
     pub const MAX_FILE_SIZE: FileSize = FileSize::MAX;
 
@@ -353,7 +357,7 @@ impl Uploader for GoFileUploader {
         Ok(Some(id))
     }
     fn name(&self) -> &str {
-        "gofile"
+        Self::NAME
     }
 
     fn capabilities(&self) -> UploaderCapabilities {
@@ -367,4 +371,22 @@ impl Uploader for GoFileUploader {
     async fn is_ready(&self) -> bool {
         true
     }
+}
+
+pub static GOFILE_SERVICE: ServiceDef = ServiceDef {
+    name: GoFileUploader::NAME,
+    display_name: "GoFile.io",
+    crate_name: env!("CARGO_PKG_NAME"),
+    credential: Credential::OptionalToken,
+    supports_folders: true,
+    capabilities: GoFileUploader::CAPABILITIES,
+    max_file_size: GoFileUploader::MAX_FILE_SIZE,
+    build,
+};
+
+fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
+    Ok(Box::new(match config.token.as_deref() {
+        Some(token) => GoFileUploader::with_token(token),
+        None => GoFileUploader::new(),
+    }))
 }

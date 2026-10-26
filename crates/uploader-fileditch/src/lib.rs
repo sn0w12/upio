@@ -7,7 +7,10 @@ use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::counted_file_stream;
 use upio_core::http::{file_name_from_path, map_io_error, map_reqwest_error, parse_json_response};
-use upio_core::types::{UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig};
+use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::types::{
+    BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
+};
 
 #[derive(Deserialize)]
 struct FileditchResponse {
@@ -67,6 +70,7 @@ pub struct FileditchUploader {
 }
 
 impl FileditchUploader {
+    pub const NAME: &str = "fileditch";
     pub const CAPABILITIES: UploaderCapabilities = UploaderCapabilities::any();
     pub const MAX_FILE_SIZE: FileSize = FileSize::from_gb(25);
 
@@ -133,7 +137,7 @@ impl Uploader for FileditchUploader {
     }
 
     fn name(&self) -> &str {
-        "fileditch"
+        Self::NAME
     }
 
     fn capabilities(&self) -> UploaderCapabilities {
@@ -147,4 +151,19 @@ impl Uploader for FileditchUploader {
     async fn is_ready(&self) -> bool {
         true
     }
+}
+
+pub static FILEDITCH_SERVICE: ServiceDef = ServiceDef {
+    name: FileditchUploader::NAME,
+    display_name: "Fileditch",
+    crate_name: env!("CARGO_PKG_NAME"),
+    credential: Credential::None,
+    supports_folders: false,
+    capabilities: FileditchUploader::CAPABILITIES,
+    max_file_size: FileditchUploader::MAX_FILE_SIZE,
+    build,
+};
+
+fn build(_config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
+    Ok(Box::new(FileditchUploader::new()))
 }

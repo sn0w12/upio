@@ -1,183 +1,58 @@
-//! Central registry of known uploaders.
+//! Catalog of the uploaders compiled into this crate.
 //!
-//! This is the single source of truth for which uploaders exist, their names,
-//! their capabilities, and how to construct them. Consumers (the CLI, a future
-//! GUI, tests) should use [`UploaderId`] and [`build_uploader`] instead of
-//! hard-coding per-service logic.
+//! Every service's facts and constructor live in its own uploader crate as a
+//! [`ServiceDef`]. This module only lists the enabled services and resolves
+//! names to handles; adding an uploader touches one line here.
 
-use upio_core::{filesize::FileSize, BoxedUploader, UploaderCapabilities, UploaderEndpointConfig};
+use std::fmt;
+use std::hash::{Hash, Hasher};
 
-// Only Bunkr's size limit needs a constructed uploader to answer, so the trait
-// is in scope exactly when that one is compiled in.
-#[cfg(feature = "bunkr")]
-use upio_core::Uploader;
+use upio_core::filesize::FileSize;
+use upio_core::types::{UploaderCapabilities, UploaderEndpointConfig};
+use upio_core::BoxedUploader;
 
-/// A known uploader service.
+pub use upio_core::{BuildError, Credential, ServiceDef};
+
+/// A handle to one compiled-in service.
 ///
-/// The `Bunkr` variant is gated on the `bunkr` feature, and so on, so the set of
-/// compile-time-known uploaders matches the enabled feature flags.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum UploaderId {
-    #[cfg(feature = "bunkr")]
-    Bunkr,
-    #[cfg(feature = "gofile")]
-    Gofile,
-    #[cfg(feature = "fileditch")]
-    Fileditch,
-    #[cfg(feature = "filester")]
-    Filester,
-    #[cfg(feature = "goonbox")]
-    Goonbox,
-    #[cfg(feature = "pixeldrain")]
-    Pixeldrain,
-}
-
-/// How a service authenticates.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Credential {
-    /// A token is required.
-    Token,
-    /// Anonymous uploads work; a token unlocks extra functionality.
-    OptionalToken,
-    /// A username and password replace the token.
-    Account,
-    /// No credentials are needed.
-    None,
-}
-
-/// Static, human-facing facts about a service.
-///
-/// Capabilities and size limits are not here: those live on the uploader
-/// implementations and can change at runtime.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct UploaderInfo {
-    pub display_name: &'static str,
-    pub crate_name: &'static str,
-    pub credential: Credential,
-    pub supports_folders: bool,
-}
+/// Equality and hashing are by descriptor identity, so the same service is
+/// always the same handle.
+#[derive(Clone, Copy)]
+pub struct UploaderId(&'static ServiceDef);
 
 impl UploaderId {
-    /// Every known uploader in a stable order.
+    /// Every compiled-in uploader in a stable order.
     pub const ALL: &'static [UploaderId] = &[
         #[cfg(feature = "bunkr")]
-        UploaderId::Bunkr,
+        UploaderId(&uploader_bunkr::BUNKR_SERVICE),
         #[cfg(feature = "gofile")]
-        UploaderId::Gofile,
+        UploaderId(&uploader_gofile::GOFILE_SERVICE),
         #[cfg(feature = "fileditch")]
-        UploaderId::Fileditch,
+        UploaderId(&uploader_fileditch::FILEDITCH_SERVICE),
         #[cfg(feature = "filester")]
-        UploaderId::Filester,
+        UploaderId(&uploader_filester::FILESTER_SERVICE),
         #[cfg(feature = "goonbox")]
-        UploaderId::Goonbox,
+        UploaderId(&uploader_goonbox::GOONBOX_SERVICE),
         #[cfg(feature = "pixeldrain")]
-        UploaderId::Pixeldrain,
+        UploaderId(&uploader_pixeldrain::PIXELDRAIN_SERVICE),
     ];
 
+    pub fn def(self) -> &'static ServiceDef {
+        self.0
+    }
+
     /// The service name as used in config files, CLI flags, and env vars.
-    pub const fn name(self) -> &'static str {
-        match self {
-            #[cfg(feature = "bunkr")]
-            UploaderId::Bunkr => "bunkr",
-            #[cfg(feature = "gofile")]
-            UploaderId::Gofile => "gofile",
-            #[cfg(feature = "fileditch")]
-            UploaderId::Fileditch => "fileditch",
-            #[cfg(feature = "filester")]
-            UploaderId::Filester => "filester",
-            #[cfg(feature = "goonbox")]
-            UploaderId::Goonbox => "goonbox",
-            #[cfg(feature = "pixeldrain")]
-            UploaderId::Pixeldrain => "pixeldrain",
-        }
+    pub fn name(self) -> &'static str {
+        self.0.name
     }
 
-    /// Human-facing details for docs and settings screens.
-    pub const fn info(self) -> UploaderInfo {
-        match self {
-            #[cfg(feature = "bunkr")]
-            UploaderId::Bunkr => UploaderInfo {
-                display_name: "Bunkr.cr",
-                crate_name: "uploader-bunkr",
-                credential: Credential::Token,
-                supports_folders: true,
-            },
-            #[cfg(feature = "gofile")]
-            UploaderId::Gofile => UploaderInfo {
-                display_name: "GoFile.io",
-                crate_name: "uploader-gofile",
-                credential: Credential::OptionalToken,
-                supports_folders: true,
-            },
-            #[cfg(feature = "fileditch")]
-            UploaderId::Fileditch => UploaderInfo {
-                display_name: "Fileditch",
-                crate_name: "uploader-fileditch",
-                credential: Credential::None,
-                supports_folders: false,
-            },
-            #[cfg(feature = "filester")]
-            UploaderId::Filester => UploaderInfo {
-                display_name: "Filester.me",
-                crate_name: "uploader-filester",
-                credential: Credential::Token,
-                supports_folders: true,
-            },
-            #[cfg(feature = "goonbox")]
-            UploaderId::Goonbox => UploaderInfo {
-                display_name: "GoonBox",
-                crate_name: "uploader-goonbox",
-                credential: Credential::Account,
-                supports_folders: true,
-            },
-            #[cfg(feature = "pixeldrain")]
-            UploaderId::Pixeldrain => UploaderInfo {
-                display_name: "Pixeldrain",
-                crate_name: "uploader-pixeldrain",
-                credential: Credential::Token,
-                supports_folders: true,
-            },
-        }
-    }
-
-    /// The kinds of files this uploader accepts.
     pub fn capabilities(self) -> UploaderCapabilities {
-        match self {
-            #[cfg(feature = "bunkr")]
-            UploaderId::Bunkr => uploader_bunkr::BunkrUploader::CAPABILITIES,
-            #[cfg(feature = "gofile")]
-            UploaderId::Gofile => uploader_gofile::GoFileUploader::CAPABILITIES,
-            #[cfg(feature = "fileditch")]
-            UploaderId::Fileditch => uploader_fileditch::FileditchUploader::CAPABILITIES,
-            #[cfg(feature = "filester")]
-            UploaderId::Filester => uploader_filester::FilesterUploader::CAPABILITIES,
-            #[cfg(feature = "goonbox")]
-            UploaderId::Goonbox => uploader_goonbox::GoonboxUploader::CAPABILITIES,
-            #[cfg(feature = "pixeldrain")]
-            UploaderId::Pixeldrain => uploader_pixeldrain::PixeldrainUploader::CAPABILITIES,
-        }
+        self.0.capabilities
     }
 
     /// The maximum file size this service accepts, in bytes.
-    ///
-    /// Constructors are synchronous and cheap, so this builds a throwaway
-    /// uploader to query it.
     pub fn max_file_size(self) -> FileSize {
-        match self {
-            // Use function since bunkr max file size is dynamic
-            #[cfg(feature = "bunkr")]
-            UploaderId::Bunkr => uploader_bunkr::BunkrUploader::with_token("").max_file_size(),
-            #[cfg(feature = "gofile")]
-            UploaderId::Gofile => uploader_gofile::GoFileUploader::MAX_FILE_SIZE,
-            #[cfg(feature = "fileditch")]
-            UploaderId::Fileditch => uploader_fileditch::FileditchUploader::MAX_FILE_SIZE,
-            #[cfg(feature = "filester")]
-            UploaderId::Filester => uploader_filester::FilesterUploader::MAX_FILE_SIZE,
-            #[cfg(feature = "goonbox")]
-            UploaderId::Goonbox => uploader_goonbox::GoonboxUploader::MAX_FILE_SIZE,
-            #[cfg(feature = "pixeldrain")]
-            UploaderId::Pixeldrain => uploader_pixeldrain::PixeldrainUploader::MAX_FILE_SIZE,
-        }
+        self.0.max_file_size
     }
 
     /// Resolve an uploader by its service name.
@@ -185,8 +60,8 @@ impl UploaderId {
     /// ```
     /// use upio::registry::UploaderId;
     ///
-    /// let id = UploaderId::from_name("gofile");
-    /// assert!(matches!(id, Some(UploaderId::Gofile)));
+    /// let id = UploaderId::from_name("gofile").unwrap();
+    /// assert_eq!(id.name(), "gofile");
     /// assert_eq!(UploaderId::from_name("unknown"), None);
     /// ```
     pub fn from_name(name: &str) -> Option<Self> {
@@ -194,131 +69,50 @@ impl UploaderId {
     }
 }
 
-/// Errors produced while constructing an uploader.
-#[derive(Debug)]
-pub enum BuildError {
-    /// The name does not match any known uploader.
-    Unknown(String),
-    /// The uploader requires a token that is not configured.
-    MissingToken(String),
-    /// The uploader's constructor failed.
-    Init(String),
-}
-
-impl std::fmt::Display for BuildError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BuildError::Unknown(name) => write!(f, "unknown uploader '{}'", name),
-            BuildError::MissingToken(name) => match missing_credential_hint(name) {
-                Some(hint) => write!(f, "{hint}"),
-                None => write!(
-                    f,
-                    "no token for '{}' (set config or UPIO_{}_TOKEN)",
-                    name,
-                    name.to_uppercase()
-                ),
-            },
-            BuildError::Init(msg) => write!(f, "failed to init uploader: {}", msg),
-        }
+impl PartialEq for UploaderId {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
     }
 }
 
-impl std::error::Error for BuildError {}
+impl Eq for UploaderId {}
 
-/// Services that sign in with an account instead of a token need their own
-/// advice, or the caller is told to set a key the service does not read.
-fn missing_credential_hint(name: &str) -> Option<String> {
-    #[cfg(feature = "goonbox")]
-    if name == "goonbox" {
-        return Some(
-            "goonbox needs a username and password (set goonbox.username and goonbox.password, \
-             or UPIO_GOONBOX_USERNAME and UPIO_GOONBOX_PASSWORD)"
-                .to_string(),
-        );
+impl Hash for UploaderId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::ptr::hash(self.0, state);
     }
-    let _ = name;
-    None
+}
+
+impl fmt::Debug for UploaderId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.name)
+    }
 }
 
 /// Build an uploader for the given id from its endpoint config.
 ///
-/// Tokens required by a service are read from `config.token`. Construction is
-/// synchronous; any network setup is deferred until upload time via
-/// `init`. On success the boxed uploader implements
-/// [`upio_core::Uploader`] and can be driven by the shared pipeline.
+/// Credential validation is part of each service's descriptor. Construction is
+/// synchronous; any network setup is deferred until upload time via `init`.
 ///
 /// # Errors
 ///
-/// Returns [`BuildError::Unknown`] for an id that is not compiled in,
-/// [`BuildError::MissingToken`] when the service requires a token that is not
-/// present in `config`, and [`BuildError::Init`] on construction failure.
+/// Returns [`BuildError::MissingCredential`] when the service requires
+/// credentials that are not present in `config`, and [`BuildError::Init`] on
+/// construction failure.
 ///
 /// ```
 /// use upio::registry::{build_uploader, BuildError, UploaderId};
 /// use upio::UploaderEndpointConfig;
 ///
-/// // Bunkr requires a token.
-/// let err = match build_uploader(UploaderId::Bunkr, &UploaderEndpointConfig::default()) {
+/// let err = match build_uploader(UploaderId::from_name("bunkr").unwrap(), &UploaderEndpointConfig::default()) {
 ///     Ok(_) => panic!("bunkr built without a token"),
 ///     Err(e) => e,
 /// };
-/// assert!(matches!(err, BuildError::MissingToken(_)));
+/// assert!(matches!(err, BuildError::MissingCredential(_)));
 /// ```
 pub fn build_uploader(
     id: UploaderId,
     config: &UploaderEndpointConfig,
 ) -> Result<BoxedUploader, BuildError> {
-    let _ = (id, config);
-    match id {
-        #[cfg(feature = "bunkr")]
-        UploaderId::Bunkr => {
-            let token = config
-                .token
-                .as_deref()
-                .ok_or_else(|| BuildError::MissingToken(id.name().to_string()))?;
-            Ok(Box::new(uploader_bunkr::BunkrUploader::with_token(token)))
-        }
-        #[cfg(feature = "gofile")]
-        UploaderId::Gofile => {
-            let uploader = match config.token.as_deref() {
-                Some(token) => uploader_gofile::GoFileUploader::with_token(token),
-                None => uploader_gofile::GoFileUploader::new(),
-            };
-            Ok(Box::new(uploader))
-        }
-        #[cfg(feature = "fileditch")]
-        UploaderId::Fileditch => Ok(Box::new(uploader_fileditch::FileditchUploader::new())),
-        #[cfg(feature = "filester")]
-        UploaderId::Filester => {
-            let uploader = match config.token.as_deref() {
-                Some(token) => uploader_filester::FilesterUploader::with_token(token),
-                None => uploader_filester::FilesterUploader::new(),
-            };
-            Ok(Box::new(uploader))
-        }
-        #[cfg(feature = "goonbox")]
-        UploaderId::Goonbox => {
-            // GoonBox signs in rather than using a token, and its login is
-            // captcha-gated, so the credentials are passed through and the
-            // captcha is solved on demand.
-            let username = config.username.clone().unwrap_or_default();
-            let password = config.password.clone().unwrap_or_default();
-            if username.is_empty() || password.is_empty() {
-                return Err(BuildError::MissingToken(id.name().to_string()));
-            }
-            Ok(Box::new(uploader_goonbox::GoonboxUploader::new(
-                &username, &password,
-            )))
-        }
-        #[cfg(feature = "pixeldrain")]
-        UploaderId::Pixeldrain => {
-            let token = config
-                .token
-                .as_deref()
-                .ok_or_else(|| BuildError::MissingToken(id.name().to_string()))?;
-            Ok(Box::new(
-                uploader_pixeldrain::PixeldrainUploader::with_token(token),
-            ))
-        }
-    }
+    (id.0.build)(config)
 }

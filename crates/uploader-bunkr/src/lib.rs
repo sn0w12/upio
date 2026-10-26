@@ -13,7 +13,10 @@ use upio_core::http::UploadProgress;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::file_name_from_path;
-use upio_core::types::{UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig};
+use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::types::{
+    BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
+};
 use uuid::Uuid;
 
 const VERIFY_URL: &str = "https://dash.bunkr.cr/api/tokens/verify";
@@ -80,6 +83,7 @@ pub struct BunkrUploader {
 }
 
 impl BunkrUploader {
+    pub const NAME: &str = "bunkr";
     pub const CAPABILITIES: UploaderCapabilities = UploaderCapabilities::any();
     pub const MAX_FILE_SIZE: FileSize = FileSize::from_gb(2);
 
@@ -727,7 +731,7 @@ impl Uploader for BunkrUploader {
     }
 
     fn name(&self) -> &str {
-        "bunkr"
+        Self::NAME
     }
 
     fn capabilities(&self) -> UploaderCapabilities {
@@ -744,6 +748,26 @@ impl Uploader for BunkrUploader {
     async fn is_ready(&self) -> bool {
         self.server.get().is_some()
     }
+}
+
+pub static BUNKR_SERVICE: ServiceDef = ServiceDef {
+    name: BunkrUploader::NAME,
+    display_name: "Bunkr.cr",
+    crate_name: env!("CARGO_PKG_NAME"),
+    credential: Credential::Token,
+    supports_folders: true,
+    capabilities: BunkrUploader::CAPABILITIES,
+    max_file_size: BunkrUploader::MAX_FILE_SIZE,
+    build,
+};
+
+fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
+    let token = config
+        .token
+        .as_deref()
+        .filter(|token| !token.trim().is_empty())
+        .ok_or_else(|| BuildError::missing_token(BunkrUploader::NAME))?;
+    Ok(Box::new(BunkrUploader::with_token(token)))
 }
 
 fn parse_size(size_str: &str) -> Result<u64, UploadError> {

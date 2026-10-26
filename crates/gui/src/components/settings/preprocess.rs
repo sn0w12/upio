@@ -17,17 +17,17 @@ use super::rule_editor::StrategyParams;
 #[component]
 pub fn PreprocessTab() -> Element {
     let mut store = use_config();
-    let mut service = use_signal(|| Some(UploaderId::Bunkr));
+    let mut service = use_signal(|| Some(UploaderId::ALL[0]));
 
     // Both the controlled value and its label derive directly from the
     // owning service signal; no duplicated writable state to go stale.
     let selected_name = use_memo(move || {
-        Some(service().unwrap_or(UploaderId::Bunkr).name()) as Option<&'static str>
+        Some(service().unwrap_or(UploaderId::ALL[0]).name()) as Option<&'static str>
     });
     let placeholder =
-        use_memo(move || service_display_name(service().unwrap_or(UploaderId::Bunkr)).to_string());
+        use_memo(move || service_display_name(service().unwrap_or(UploaderId::ALL[0])).to_string());
 
-    let id = service().unwrap_or(UploaderId::Bunkr);
+    let id = service().unwrap_or(UploaderId::ALL[0]);
     let endpoint = store.endpoint(id);
     let preprocess = endpoint.preprocess;
 

@@ -17,8 +17,8 @@ const BLOCKS: &[(&str, Render)] = &[
     ("strategies", strategies_table),
 ];
 
-const OPTIONAL_TOKEN_NOTE: &str = "\\* Optional. Anonymous uploads work without one, however \
-                                   some functionality may be locked behind the token.";
+const OPTIONAL_TOKEN_NOTE: &str = "\\* Optional. Anonymous uploads work without auth, however \
+                                   some functionality may be locked behind it.";
 
 /// An error produced while syncing a README.
 #[derive(Debug, PartialEq, Eq)]
@@ -64,28 +64,28 @@ pub fn sync(readme: &str) -> Result<String, DocsError> {
 }
 
 /// The services table and, when a service accepts anonymous uploads, the
-/// footnote that explains the `No*` marker.
+/// footnote that explains the `Optional*` marker.
 pub fn services_table() -> String {
     let mut has_optional_token = false;
 
     let rows = UploaderId::ALL
         .iter()
         .map(|id| {
-            let info = id.info();
-            let token = match info.credential {
-                Credential::Token => "Yes",
+            let def = id.def();
+            let auth = match def.credential {
+                Credential::Token | Credential::Account => "Yes",
                 Credential::OptionalToken => {
                     has_optional_token = true;
-                    "No\\*"
+                    "Optional\\*"
                 }
-                Credential::Account | Credential::None => "No",
+                Credential::None => "No",
             };
 
             vec![
-                info.display_name.to_string(),
-                format!("`{}`", info.crate_name),
-                token.to_string(),
-                yes_no(info.supports_folders),
+                def.display_name.to_string(),
+                format!("`{}`", def.crate_name),
+                auth.to_string(),
+                yes_no(def.supports_folders),
                 capabilities_label(id.capabilities()),
             ]
         })
@@ -95,7 +95,7 @@ pub fn services_table() -> String {
         &[
             "Service",
             "Crate",
-            "Token Required",
+            "Auth Required",
             "Folder / album",
             "Capabilities",
         ],
@@ -328,7 +328,7 @@ Outro
         let table = services_table();
         let has_optional = UploaderId::ALL
             .iter()
-            .any(|id| id.info().credential == Credential::OptionalToken);
+            .any(|id| id.def().credential == Credential::OptionalToken);
 
         assert_eq!(table.contains(OPTIONAL_TOKEN_NOTE), has_optional);
     }

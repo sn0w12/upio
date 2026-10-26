@@ -25,17 +25,18 @@ fn every_id_has_distinct_info() {
     let mut crate_names = std::collections::HashSet::new();
 
     for id in UploaderId::ALL {
-        let info = id.info();
+        let def = id.def();
         assert!(
-            !info.display_name.is_empty(),
+            !def.display_name.is_empty(),
             "{} has no display name",
             id.name()
         );
+        assert_eq!(def.name, id.name());
         assert!(
-            crate_names.insert(info.crate_name),
+            crate_names.insert(def.crate_name),
             "{} reuses crate name '{}'",
             id.name(),
-            info.crate_name
+            def.crate_name
         );
     }
 }
@@ -48,7 +49,7 @@ fn build_bunkr_without_token_fails() {
         Ok(_) => panic!("bunkr built without a token"),
         Err(e) => e,
     };
-    assert!(matches!(err, BuildError::MissingToken(_)));
+    assert!(matches!(err, BuildError::MissingCredential(_)));
 }
 
 #[test]
@@ -58,7 +59,7 @@ fn build_goonbox_without_credentials_fails() {
         Ok(_) => panic!("goonbox built without a username"),
         Err(e) => e,
     };
-    assert!(matches!(err, BuildError::MissingToken(_)));
+    assert!(matches!(err, BuildError::MissingCredential(_)));
 }
 
 #[test]
@@ -84,7 +85,7 @@ fn build_pixeldrain_without_token_fails() {
         Ok(_) => panic!("pixeldrain built without a token"),
         Err(e) => e,
     };
-    assert!(matches!(err, BuildError::MissingToken(_)));
+    assert!(matches!(err, BuildError::MissingCredential(_)));
 }
 
 #[test]
