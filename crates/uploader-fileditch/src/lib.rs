@@ -12,6 +12,10 @@ use upio_core::types::{
     BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
 };
 
+mod download;
+
+pub use download::FileditchDownloader;
+
 #[derive(Deserialize)]
 struct FileditchResponse {
     success: bool,
@@ -162,7 +166,7 @@ pub static FILEDITCH_SERVICE: ServiceDef = ServiceDef {
     capabilities: FileditchUploader::CAPABILITIES,
     max_file_size: FileditchUploader::MAX_FILE_SIZE,
     build,
-    download: None,
+    download: Some(download::FILEDITCH_DOWNLOAD),
 };
 
 fn build(_config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

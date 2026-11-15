@@ -13,7 +13,7 @@ Currently supported services:
 | ----------- | --------------------- | ------------- | -------------- | -------- | ------------ |
 | Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | No       | All          |
 | GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | No       | All          |
-| Fileditch   | `uploader-fileditch`  | No            | No             | No       | All          |
+| Fileditch   | `uploader-fileditch`  | No            | No             | Yes      | All          |
 | Filester.me | `uploader-filester`   | Optional\*    | Yes            | No       | All          |
 | GoonBox     | `uploader-goonbox`    | Yes           | Yes            | No       | Image        |
 | Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | No       | All          |
@@ -363,6 +363,12 @@ A service advertises download support by adding a `DownloadDef` to its
 `ServiceDef`. `UploaderId::from_url` dispatches a URL to the service that claims
 it, and `registry::build_downloader(id, config)` builds the downloader. A
 service without a descriptor is upload-only.
+
+Fileditch share pages gate their direct link behind a WebAssembly browser check.
+Its downloader runs a real Chrome to pass that check, reads the link the page
+assigns to its download button, and hands the public URL to the shared engine.
+Chrome must be installed. On headless Linux without a display, upio starts Xvfb
+when it is available.
 
 ## GUI
 
