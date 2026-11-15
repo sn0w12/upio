@@ -7,13 +7,15 @@ use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::counted_file_stream;
 use upio_core::http::{file_name_from_path, map_io_error, map_reqwest_error, parse_json_response};
-use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::service::{BuildError, Credential, DownloadDef, ServiceDef};
 use upio_core::types::{
     BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
 };
 
+#[cfg(feature = "download")]
 mod download;
 
+#[cfg(feature = "download")]
 pub use download::FileditchDownloader;
 
 #[derive(Deserialize)]
@@ -157,6 +159,11 @@ impl Uploader for FileditchUploader {
     }
 }
 
+#[cfg(feature = "download")]
+const DOWNLOAD: Option<DownloadDef> = Some(download::FILEDITCH_DOWNLOAD);
+#[cfg(not(feature = "download"))]
+const DOWNLOAD: Option<DownloadDef> = None;
+
 pub static FILEDITCH_SERVICE: ServiceDef = ServiceDef {
     name: FileditchUploader::NAME,
     display_name: "Fileditch",
@@ -166,7 +173,7 @@ pub static FILEDITCH_SERVICE: ServiceDef = ServiceDef {
     capabilities: FileditchUploader::CAPABILITIES,
     max_file_size: FileditchUploader::MAX_FILE_SIZE,
     build,
-    download: Some(download::FILEDITCH_DOWNLOAD),
+    download: DOWNLOAD,
 };
 
 fn build(_config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

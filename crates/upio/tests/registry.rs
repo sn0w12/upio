@@ -26,6 +26,7 @@ fn unknown_urls_have_no_downloader() {
     assert_eq!(UploaderId::from_url("not a url"), None);
 }
 
+#[cfg(feature = "download")]
 #[test]
 fn fileditch_share_urls_are_registered() {
     let id = UploaderId::from_url("https://fileditchvids.st/alice/abc123/file.mp4").unwrap();

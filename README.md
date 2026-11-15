@@ -22,6 +22,9 @@ Currently supported services:
 
 <!-- END generated: services -->
 
+Downloads are opt-in. The Download column shows support when the `download`
+feature is enabled.
+
 ## Quick start
 
 Build and run the CLI from the repo:
@@ -260,6 +263,7 @@ available.
 Use the `upio` crate to upload from your own Rust program. The crate re-exports
 every service; feature flags control which ones are compiled in
 (`default = ["bunkr", "gofile", "fileditch", "filester", "goonbox", "pixeldrain"]`).
+Downloads are behind the opt-in `download` feature, which is off by default.
 
 ```toml
 [dependencies]
@@ -332,7 +336,8 @@ endpoint config, the same path the CLI uses.
 
 Downloads use the `Downloader` trait. A service implements `resolve` to turn a
 share URL into a tree of files, and the shared engine handles naming,
-conflicts, resume, retries, and atomic completion:
+conflicts, resume, retries, and atomic completion. Enable `download` on the
+dependency to compile it:
 
 ```rust
 use upio::download::{self, DownloadOptions, DirectDownloader, Downloader};
@@ -421,10 +426,11 @@ The services and strategies tables above are generated from the code. After
 adding an uploader or preprocessing strategy, regenerate them:
 
 ```sh
-cargo run -p upio --example readme
+cargo run -p upio --example readme --all-features
 ```
 
-`cargo test -p upio` fails when the README and the code disagree.
+`cargo test -p upio --all-features` fails when the README and the code disagree.
+The generated table assumes every feature, including `download`, is enabled.
 
 Build an optimized binary (release profile is configured in the workspace root):
 

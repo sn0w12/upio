@@ -3,25 +3,40 @@
 //! A service only has to turn a share URL into a [`RemoteNode`] tree of direct
 //! URLs. Everything after that (naming, conflicts, resume, retries, atomic
 //! completion) is handled here, so every service gets the same behavior.
+//!
+//! The transfer engine and `DirectDownloader` are behind the `download`
+//! feature. The trait and manifest stay available so the service catalog does
+//! not depend on it.
 
+#[cfg(feature = "download")]
 use std::collections::HashSet;
+#[cfg(feature = "download")]
 use std::path::{Path, PathBuf};
+#[cfg(feature = "download")]
 use std::time::Duration;
 
 use async_trait::async_trait;
+#[cfg(feature = "download")]
 use futures::StreamExt;
+#[cfg(feature = "download")]
 use tokio::io::AsyncWriteExt;
 
 use crate::error::UpioError;
+#[cfg(feature = "download")]
 use crate::filename::{sanitize_component, unique_name};
-use crate::http::{map_io_error, map_reqwest_error};
+#[cfg(feature = "download")]
+use crate::http::map_io_error;
+use crate::http::map_reqwest_error;
 use crate::types::UploaderEndpointConfig;
 
+#[cfg(feature = "download")]
 mod direct;
 
+#[cfg(feature = "download")]
 pub use direct::DirectDownloader;
 
 /// How many times a failed transfer is retried before the error is returned.
+#[cfg(feature = "download")]
 const RETRIES: u32 = 3;
 
 /// What kind of resource a service URL points at.
@@ -123,13 +138,16 @@ pub type BoxedDownloader = Box<dyn Downloader>;
 /// Progress callback receiving `(destination, transferred, total)` bytes.
 ///
 /// `total` is zero when the server did not report a size.
+#[cfg(feature = "download")]
 #[derive(Clone)]
 pub struct DownloadProgress {
     inner: std::sync::Arc<ProgressCallback>,
 }
 
+#[cfg(feature = "download")]
 type ProgressCallback = dyn Fn(&Path, u64, u64) + Send + Sync;
 
+#[cfg(feature = "download")]
 impl DownloadProgress {
     pub fn new(f: impl Fn(&Path, u64, u64) + Send + Sync + 'static) -> Self {
         Self {
@@ -182,6 +200,7 @@ impl std::fmt::Display for ConflictPolicy {
 }
 
 /// How a download batch writes files to disk.
+#[cfg(feature = "download")]
 #[derive(Clone, Debug)]
 pub struct DownloadOptions {
     pub output_dir: PathBuf,
@@ -190,6 +209,7 @@ pub struct DownloadOptions {
     pub on_conflict: ConflictPolicy,
 }
 
+#[cfg(feature = "download")]
 impl Default for DownloadOptions {
     fn default() -> Self {
         Self {
@@ -202,6 +222,7 @@ impl Default for DownloadOptions {
 }
 
 /// One resolved file with its final destination.
+#[cfg(feature = "download")]
 #[derive(Clone, Debug)]
 pub struct PlannedFile {
     pub source: RemoteFile,
@@ -210,12 +231,14 @@ pub struct PlannedFile {
 }
 
 /// The complete set of files a URL will produce.
+#[cfg(feature = "download")]
 #[derive(Clone, Debug)]
 pub struct DownloadPlan {
     pub files: Vec<PlannedFile>,
     pub resume: bool,
 }
 
+#[cfg(feature = "download")]
 impl Default for DownloadPlan {
     fn default() -> Self {
         Self {
@@ -225,6 +248,7 @@ impl Default for DownloadPlan {
     }
 }
 
+#[cfg(feature = "download")]
 impl DownloadPlan {
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
@@ -245,6 +269,7 @@ impl DownloadPlan {
 }
 
 /// The outcome of downloading one planned file.
+#[cfg(feature = "download")]
 #[derive(Clone, Debug)]
 pub struct DownloadResult {
     pub source_url: String,
@@ -259,6 +284,7 @@ pub struct DownloadResult {
 /// Remote names are sanitized component by component, so every destination
 /// stays under `options.output_dir`. Name collisions are resolved according to
 /// the conflict policy before any bytes are written.
+#[cfg(feature = "download")]
 pub fn plan(node: &RemoteNode, options: &DownloadOptions) -> Result<DownloadPlan, UpioError> {
     let mut candidates = Vec::new();
     collect(node, Path::new(""), options.flat, &mut candidates);
@@ -292,6 +318,7 @@ pub fn plan(node: &RemoteNode, options: &DownloadOptions) -> Result<DownloadPlan
 }
 
 /// Download every planned file, running up to `concurrency` at once.
+#[cfg(feature = "download")]
 pub async fn download(
     plan: &DownloadPlan,
     downloader: &dyn Downloader,
@@ -315,6 +342,7 @@ pub async fn download(
 /// Partial data lives in `<destination>.part` until the transfer completes, so
 /// an interrupted run can resume and a destination never contains a truncated
 /// file. Failed transfers are retried from the current partial size.
+#[cfg(feature = "download")]
 pub async fn download_file(
     file: &RemoteFile,
     destination: &Path,
@@ -358,6 +386,7 @@ pub async fn download_file(
     Err(last_error.expect("the retry loop runs at least once"))
 }
 
+#[cfg(feature = "download")]
 async fn transfer_once(
     file: &RemoteFile,
     destination: &Path,
@@ -462,6 +491,7 @@ async fn transfer_once(
     Ok(written)
 }
 
+#[cfg(feature = "download")]
 async fn download_one(
     file: &PlannedFile,
     downloader: &dyn Downloader,
@@ -512,6 +542,7 @@ async fn download_one(
     }
 }
 
+#[cfg(feature = "download")]
 fn collect(node: &RemoteNode, base: &Path, flat: bool, out: &mut Vec<(PathBuf, RemoteFile)>) {
     match node {
         RemoteNode::File(file) => {
@@ -531,12 +562,14 @@ fn collect(node: &RemoteNode, base: &Path, flat: bool, out: &mut Vec<(PathBuf, R
     }
 }
 
+#[cfg(feature = "download")]
 fn partial_path(destination: &Path) -> PathBuf {
     let mut path = destination.as_os_str().to_os_string();
     path.push(".part");
     PathBuf::from(path)
 }
 
+#[cfg(feature = "download")]
 fn path_key(path: &Path) -> PathBuf {
     #[cfg(any(windows, target_os = "macos"))]
     {
@@ -548,6 +581,7 @@ fn path_key(path: &Path) -> PathBuf {
     }
 }
 
+#[cfg(feature = "download")]
 async fn remove_partial(partial: &Path) -> Result<(), UpioError> {
     match tokio::fs::remove_file(partial).await {
         Ok(()) => Ok(()),
@@ -556,6 +590,7 @@ async fn remove_partial(partial: &Path) -> Result<(), UpioError> {
     }
 }
 
+#[cfg(feature = "download")]
 fn content_range_total(response: &reqwest::Response) -> Option<u64> {
     let value = response
         .headers()
@@ -565,6 +600,7 @@ fn content_range_total(response: &reqwest::Response) -> Option<u64> {
     parse_content_range_total(value)
 }
 
+#[cfg(feature = "download")]
 fn parse_content_range_total(value: &str) -> Option<u64> {
     let (range, total) = value.rsplit_once('/')?;
     if !range.trim_start().starts_with("bytes ") {
@@ -573,6 +609,7 @@ fn parse_content_range_total(value: &str) -> Option<u64> {
     total.trim().parse().ok()
 }
 
+#[cfg(feature = "download")]
 fn is_retryable(error: &UpioError) -> bool {
     match error.status_code {
         None => true,
@@ -580,10 +617,12 @@ fn is_retryable(error: &UpioError) -> bool {
     }
 }
 
+#[cfg(feature = "download")]
 fn backoff(attempt: u32) -> Duration {
     Duration::from_millis(500 * 2u64.pow(attempt.min(5)))
 }
 
+#[cfg(feature = "download")]
 fn truncate_chars(value: &str, limit: usize) -> String {
     if value.chars().count() <= limit {
         return value.to_string();
@@ -595,10 +634,12 @@ fn truncate_chars(value: &str, limit: usize) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "download")]
     fn file(name: &str, url: &str) -> RemoteNode {
         RemoteNode::File(RemoteFile::new(name, url))
     }
 
+    #[cfg(feature = "download")]
     fn options(output_dir: &Path) -> DownloadOptions {
         DownloadOptions {
             output_dir: output_dir.to_path_buf(),
@@ -606,6 +647,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn folders_are_preserved_in_the_destination() {
         let node = RemoteNode::Folder {
@@ -619,6 +661,7 @@ mod tests {
         assert_eq!(plan.files[0].destination, dir.path().join("Album/clip.mp4"));
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn flat_drops_remote_folder_names() {
         let node = RemoteNode::Folder {
@@ -636,6 +679,7 @@ mod tests {
         assert_eq!(plan.files[0].destination, dir.path().join("clip.mp4"));
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn hostile_remote_names_stay_inside_the_output_directory() {
         let node = RemoteNode::Folder {
@@ -652,6 +696,7 @@ mod tests {
             .all(|component| !matches!(component, std::path::Component::ParentDir)));
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn colliding_names_are_renamed() {
         let node = RemoteNode::Folder {
@@ -671,6 +716,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn skip_policy_marks_existing_files() {
         let node = file("clip.mp4", "https://example.test/clip");
@@ -685,6 +731,7 @@ mod tests {
         assert_eq!(plan.total_known_bytes(), 0);
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn overwrite_policy_keeps_the_original_name() {
         let node = file("clip.mp4", "https://example.test/clip");
@@ -711,6 +758,7 @@ mod tests {
         assert!("bogus".parse::<ConflictPolicy>().is_err());
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn content_range_total_is_read_when_present() {
         assert_eq!(parse_content_range_total("bytes 100-199/1234"), Some(1234));
@@ -718,6 +766,7 @@ mod tests {
         assert_eq!(parse_content_range_total("garbage"), None);
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn partial_files_are_suffixed() {
         assert_eq!(
@@ -726,6 +775,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "download")]
     #[test]
     fn retryable_statuses_are_transient_only() {
         assert!(is_retryable(&UpioError {

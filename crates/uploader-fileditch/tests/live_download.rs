@@ -1,3 +1,5 @@
+#![cfg(feature = "download")]
+
 use upio_core::download::{Downloader, RemoteNode};
 use uploader_fileditch::FileditchDownloader;
 

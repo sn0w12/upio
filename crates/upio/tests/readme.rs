@@ -4,7 +4,8 @@
     feature = "fileditch",
     feature = "filester",
     feature = "goonbox",
-    feature = "pixeldrain"
+    feature = "pixeldrain",
+    feature = "download"
 ))]
 
 use std::path::PathBuf;
