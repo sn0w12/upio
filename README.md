@@ -367,8 +367,9 @@ service without a descriptor is upload-only.
 Fileditch share pages gate their direct link behind a WebAssembly browser check.
 Its downloader runs a real Chrome to pass that check, reads the link the page
 assigns to its download button, and hands the public URL to the shared engine.
-Chrome must be installed. On headless Linux without a display, upio starts Xvfb
-when it is available.
+Chrome must be installed. GoonBox and Fileditch share one profile at
+`<config-dir>/upio/chrome-profile`, so clearance cookies are paid for once. On
+headless Linux without a display, upio starts Xvfb when it is available.
 
 ## GUI
 
@@ -393,15 +394,16 @@ controls are reachable by keyboard.
 | Crate                     | Purpose                                                                         |
 | ------------------------- | ------------------------------------------------------------------------------- |
 | `crates/core`             | Shared types, traits, errors, HTTP helpers, the download engine, and preprocessing. |
+| `crates/browser`          | Shared headed Chrome session, webdriver setup, and the one Chrome profile.      |
 | `crates/uploader-*bunkr*` | Uploader implementations.                                                       |
 | `crates/upio`             | Unified library: feature flags, the upload pipeline, and the service registry.  |
 | `crates/config`           | Config model, layered env/file reader, typed keys, and atomic writes.           |
 | `crates/cli`              | The `upio` command-line binary.                                                 |
 | `crates/gui`              | The `upio-gui` Dioxus desktop app.                                              |
 
-Versioning: `upio-core`, the per-service `uploader-*` crates, and the `upio`
-crate are released together from the workspace version. The `upio-config` and
-`upio-cli` crates are versioned independently.
+Versioning: `upio-core`, `upio-browser`, the per-service `uploader-*` crates, and
+the `upio` crate are released together from the workspace version. The
+`upio-config` and `upio-cli` crates are versioned independently.
 
 ## Development
 

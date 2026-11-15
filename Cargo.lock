@@ -6216,6 +6216,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "upio-browser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chaser-oxide",
+ "dirs",
+ "futures",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "upio-cli"
 version = "0.1.0"
 dependencies = [
@@ -6303,16 +6316,13 @@ dependencies = [
 name = "uploader-fileditch"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "async-trait",
- "chaser-oxide",
- "dirs",
- "futures",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tokio",
  "tokio-util",
+ "upio-browser",
  "upio-core",
 ]
 
@@ -6349,13 +6359,12 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chaser-oxide",
- "dirs",
- "futures",
  "rand 0.9.5",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
  "tokio",
+ "upio-browser",
  "upio-core",
 ]
 

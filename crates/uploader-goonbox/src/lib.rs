@@ -170,10 +170,7 @@ impl Default for GoonboxUploader {
 }
 
 fn default_profile_dir() -> PathBuf {
-    dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("upio")
-        .join("chrome-profile")
+    upio_browser::profile_path()
 }
 
 #[async_trait]

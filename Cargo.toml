@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/core",
+    "crates/browser",
     "crates/uploader-bunkr",
     "crates/uploader-gofile",
     "crates/uploader-fileditch",
@@ -60,6 +61,7 @@ windows-sys = { version = "0.61", features = [
 
 upio = { path = "crates/upio" }
 upio-core = { path = "crates/core" }
+upio-browser = { path = "crates/browser" }
 upio-config = { path = "crates/config" }
 uploader-bunkr = { path = "crates/uploader-bunkr" }
 uploader-gofile = { path = "crates/uploader-gofile" }

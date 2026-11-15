@@ -6,15 +6,11 @@
 //! The returned URL is public and resumable, so the shared engine handles the
 //! actual transfer.
 
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use chaser_oxide::cdp::browser_protocol::page::AddScriptToEvaluateOnNewDocumentParams;
-use chaser_oxide::cdp::browser_protocol::target::CreateTargetParams;
-use chaser_oxide::{Browser, BrowserConfig, ChaserPage};
-use futures::StreamExt;
 
+use upio_browser::BrowserSession;
 use upio_core::download::{Downloader, ParsedUrl, RemoteFile, RemoteNode, ResourceKind};
 use upio_core::error::UpioError;
 use upio_core::service::DownloadDef;
@@ -117,41 +113,12 @@ pub fn parse_url(url: &str) -> Option<ParsedUrl> {
 }
 
 async fn resolve_with_browser(url: &str) -> Result<ResolvedLink, UpioError> {
-    let _display = VirtualDisplay::start_if_needed();
-    let profile = profile_dir()?;
-
-    let config = BrowserConfig::builder()
-        .viewport(None)
-        .with_head()
-        .hide()
-        .user_data_dir(&profile)
-        .build()
-        .map_err(browser_error)?;
-
-    let (browser, mut handler) = Browser::launch(config).await.map_err(browser_error)?;
-    tokio::spawn(async move { while handler.next().await.is_some() {} });
-
-    let page = browser
-        .new_page(CreateTargetParams::new("about:blank"))
-        .await
-        .map_err(browser_error)?;
-    let chaser = ChaserPage::new(page.clone());
-
-    chaser.apply_native_profile().await.map_err(browser_error)?;
-    page.execute(AddScriptToEvaluateOnNewDocumentParams {
-        source: WEBDRIVER_OVERRIDE.to_string(),
-        world_name: None,
-        include_command_line_api: None,
-        run_immediately: None,
-    })
-    .await
-    .map_err(browser_error)?;
-
-    chaser.goto(url).await.map_err(browser_error)?;
+    let session = BrowserSession::launch().await.map_err(browser_error)?;
+    session.goto(url).await.map_err(browser_error)?;
 
     let deadline = Instant::now() + RESOLVE_TIMEOUT;
     loop {
-        if let Some(link) = read_download_href(&chaser).await {
+        if let Some(link) = read_download_href(&session).await {
             return Ok(link);
         }
         if Instant::now() >= deadline {
@@ -165,14 +132,14 @@ async fn resolve_with_browser(url: &str) -> Result<ResolvedLink, UpioError> {
             "fileditch did not expose a download link within {}s; Chrome needs a display on a \
              headless Linux host, or open the page once in the profile at {}",
             RESOLVE_TIMEOUT.as_secs(),
-            profile.display()
+            session.profile().display()
         ),
         status_code: None,
     })
 }
 
-async fn read_download_href(chaser: &ChaserPage) -> Option<ResolvedLink> {
-    let value = chaser.evaluate(READ_DOWNLOAD_HREF).await.ok().flatten()?;
+async fn read_download_href(session: &BrowserSession) -> Option<ResolvedLink> {
+    let value = session.evaluate(READ_DOWNLOAD_HREF).await.ok().flatten()?;
     let href = value.get("href")?.as_str()?.trim().to_string();
     if href.is_empty() {
         return None;
@@ -198,21 +165,6 @@ fn fallback_name(url: &str) -> String {
         .unwrap_or_else(|| "download".to_string())
 }
 
-fn profile_dir() -> Result<PathBuf, UpioError> {
-    let path = dirs::config_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("upio")
-        .join("fileditch-chrome");
-    std::fs::create_dir_all(&path).map_err(|error| UpioError {
-        message: format!(
-            "could not create the Chrome profile at {}: {error}",
-            path.display()
-        ),
-        status_code: None,
-    })?;
-    Ok(path)
-}
-
 fn browser_error(error: impl std::fmt::Display) -> UpioError {
     UpioError {
         message: format!(
@@ -232,87 +184,6 @@ fn build(
     _config: &UploaderEndpointConfig,
 ) -> Result<upio_core::BoxedDownloader, upio_core::BuildError> {
     Ok(Box::new(FileditchDownloader::new()))
-}
-
-/// Page-level driver tells. `apply_native_profile` covers the CDP-level ones.
-const WEBDRIVER_OVERRIDE: &str = r#"
-(function() {
-  try {
-    var proto = Object.getPrototypeOf(navigator);
-    if (proto) {
-      try { delete proto.webdriver; } catch (e) {}
-      Object.defineProperty(proto, 'webdriver', {
-        get: function() { return false; },
-        configurable: true,
-        enumerable: true
-      });
-    }
-  } catch (e) {
-    try { delete navigator.webdriver; } catch (e2) {}
-  }
-  var props = Object.getOwnPropertyNames(window);
-  for (var i = 0; i < props.length; i++) {
-    if (/^cdc_|^\$cdc_|^__webdriver|^__selenium|^__driver|^\$chrome_/.test(props[i])) {
-      try { delete window[props[i]]; } catch (e) {}
-    }
-  }
-})();
-"#;
-
-/// Chrome needs a display even when the window is hidden. On Linux without
-/// `DISPLAY`, Xvfb supplies one.
-struct VirtualDisplay {
-    #[allow(dead_code)]
-    child: Option<std::process::Child>,
-}
-
-impl VirtualDisplay {
-    #[cfg(target_os = "linux")]
-    fn start_if_needed() -> Self {
-        if !std::env::var("DISPLAY").unwrap_or_default().is_empty() {
-            return Self { child: None };
-        }
-
-        let lock = std::path::Path::new("/tmp/.X99-lock");
-        if lock.exists() {
-            unsafe { std::env::set_var("DISPLAY", ":99") };
-            return Self { child: None };
-        }
-
-        let spawned = std::process::Command::new("Xvfb")
-            .args([
-                ":99",
-                "-screen",
-                "0",
-                "1920x1080x24",
-                "-ac",
-                "+extension",
-                "GLX",
-                "+render",
-                "-noreset",
-            ])
-            .spawn();
-
-        let child = match spawned {
-            Ok(child) => child,
-            Err(_) => return Self { child: None },
-        };
-
-        unsafe { std::env::set_var("DISPLAY", ":99") };
-        for _ in 0..50 {
-            if lock.exists() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-
-        Self { child: Some(child) }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    fn start_if_needed() -> Self {
-        Self { child: None }
-    }
 }
 
 #[cfg(test)]

@@ -7,11 +7,8 @@ license.workspace = true
 
 [dependencies]
 upio-core = { workspace = true }
-anyhow = { workspace = true }
+upio-browser = { workspace = true }
 async-trait = { workspace = true }
-chaser-oxide = { workspace = true }
-dirs = { workspace = true }
-futures = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
