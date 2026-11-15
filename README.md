@@ -1,22 +1,25 @@
 # upio
 
-Upload files to multiple hosting services from the command line or your own
-Rust code, with optional preprocessing (splitting, compression, renaming) so
-files fit the target service's limits. A desktop GUI is also included.
+Upload and download files from multiple hosting services in your own Rust code,
+with optional preprocessing (splitting, compression, renaming) so files fit the
+target service's limits. Uploading is also available from the command line, and
+a desktop GUI is included.
 
 Currently supported services:
 
 <!-- BEGIN generated: services -->
-| Service     | Crate                 | Auth Required | Folder / album | Capabilities |
-| ----------- | --------------------- | ------------- | -------------- | ------------ |
-| Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | All          |
-| GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | All          |
-| Fileditch   | `uploader-fileditch`  | No            | No             | All          |
-| Filester.me | `uploader-filester`   | Optional\*    | Yes            | All          |
-| GoonBox     | `uploader-goonbox`    | Yes           | Yes            | Image        |
-| Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | All          |
+
+| Service     | Crate                 | Auth Required | Folder / album | Download | Capabilities |
+| ----------- | --------------------- | ------------- | -------------- | -------- | ------------ |
+| Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | No       | All          |
+| GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | No       | All          |
+| Fileditch   | `uploader-fileditch`  | No            | No             | No       | All          |
+| Filester.me | `uploader-filester`   | Optional\*    | Yes            | No       | All          |
+| GoonBox     | `uploader-goonbox`    | Yes           | Yes            | No       | Image        |
+| Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | No       | All          |
 
 \* Optional. Anonymous uploads work without auth, however some functionality may be locked behind it.
+
 <!-- END generated: services -->
 
 ## Quick start
@@ -149,6 +152,13 @@ variables take precedence over the config file.
 ```toml
 [global]
 disabled_uploaders = []
+disabled_downloaders = []
+
+[global.download]
+output_dir = "…"       # optional; defaults to the current directory
+concurrency = 4
+resume = true
+on_conflict = "rename" # rename | skip | overwrite
 
 [bunkr]
 token = "…"
@@ -177,8 +187,9 @@ folder_id = "…" # a list's id
 # Per-service preprocessing lives under e.g. [bunkr.preprocess]; see below.
 ```
 
-Unknown keys in `disabled_uploaders` are inert; only exact canonical service
-names disable anything.
+Unknown keys in `disabled_uploaders` or `disabled_downloaders` are inert; only
+exact canonical service names disable anything. The two lists are independent,
+so a service can be enabled for one direction and disabled for the other.
 
 ## Preprocessing
 
@@ -230,12 +241,14 @@ the upload's URLs are preserved but the result reports the cleanup error.
 Strategies run in this canonical chain order:
 
 <!-- BEGIN generated: strategies -->
+
 | #   | Strategy         | Trigger      | What it does                                                                                                                    | Requirements               |
 | --- | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | 1   | `normalize_name` | Always       | Sanitize the file name (spaces, unicode, invalid characters); length-capped, Unicode-safe. The original file is never modified. | None (pure Rust)           |
 | 2   | `compress_image` | If oversized | Re-encode and/or resize images; outputs jpeg or png.                                                                            | None (pure Rust)           |
 | 3   | `wrap_zip`       | Always       | Wrap the file in a compressed zip (useful for text and log files). Skips images and videos.                                     | None (pure Rust)           |
 | 4   | `split_video`    | If oversized | Split a video into independently playable segments via ffmpeg and ffprobe.                                                      | ffmpeg + ffprobe on `PATH` |
+
 <!-- END generated: strategies -->
 
 When a strategy needs an external tool that is missing, the rule is skipped
@@ -317,6 +330,40 @@ module. It is the single source of truth for known uploaders: `UploaderId`
 enumerates them and `registry::build_uploader(id, config)` builds one from an
 endpoint config, the same path the CLI uses.
 
+Downloads use the `Downloader` trait. A service implements `resolve` to turn a
+share URL into a tree of files, and the shared engine handles naming,
+conflicts, resume, retries, and atomic completion:
+
+```rust
+use upio::download::{self, DownloadOptions, DirectDownloader, Downloader};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let downloader = DirectDownloader::new();
+    let node = downloader
+        .resolve("https://cdn.example.com/clip.mp4", &Default::default())
+        .await?;
+    let plan = download::plan(
+        &node,
+        &DownloadOptions {
+            output_dir: "videos".into(),
+            ..Default::default()
+        },
+    )?;
+
+    let results = download::download(&plan, &downloader, &Default::default(), 4, None).await;
+    for result in results {
+        println!("{} -> {:?} {:?}", result.source_url, result.destination, result.error);
+    }
+    Ok(())
+}
+```
+
+A service advertises download support by adding a `DownloadDef` to its
+`ServiceDef`. `UploaderId::from_url` dispatches a URL to the service that claims
+it, and `registry::build_downloader(id, config)` builds the downloader. A
+service without a descriptor is upload-only.
+
 ## GUI
 
 The Dioxus 0.7 desktop app is in `crates/gui` (`upio-gui`). It shares
@@ -339,9 +386,9 @@ controls are reachable by keyboard.
 
 | Crate                     | Purpose                                                                         |
 | ------------------------- | ------------------------------------------------------------------------------- |
-| `crates/core`             | Shared types, traits, error handling, HTTP helpers, and preprocessing.          |
+| `crates/core`             | Shared types, traits, errors, HTTP helpers, the download engine, and preprocessing. |
 | `crates/uploader-*bunkr*` | Uploader implementations.                                                       |
-| `crates/upio`             | Unified library: feature flags, the upload pipeline, and the uploader registry. |
+| `crates/upio`             | Unified library: feature flags, the upload pipeline, and the service registry.  |
 | `crates/config`           | Config model, layered env/file reader, typed keys, and atomic writes.           |
 | `crates/cli`              | The `upio` command-line binary.                                                 |
 | `crates/gui`              | The `upio-gui` Dioxus desktop app.                                              |
