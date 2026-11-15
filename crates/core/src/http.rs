@@ -85,26 +85,29 @@ pub async fn make_file_part(file_path: &str) -> Result<Part, UploadError> {
     Ok(Part::stream(file).file_name(file_name_from_path(file_path)))
 }
 
-/// Progress callback receiving cumulative `(uploaded, total)` bytes.
+/// Progress callback receiving cumulative `(transferred, total)` bytes.
 ///
 /// An owned, cloneable wrapper so progress can be threaded through retry
 /// closures that require `'static`.
 #[derive(Clone)]
-pub struct UploadProgress {
+pub struct TransferProgress {
     inner: std::sync::Arc<dyn Fn(u64, u64) + Send + Sync>,
 }
 
-impl UploadProgress {
+impl TransferProgress {
     pub fn new(f: impl Fn(u64, u64) + Send + Sync + 'static) -> Self {
         Self {
             inner: std::sync::Arc::new(f),
         }
     }
 
-    pub fn emit(&self, uploaded: u64, total: u64) {
-        (self.inner)(uploaded, total);
+    pub fn emit(&self, transferred: u64, total: u64) {
+        (self.inner)(transferred, total);
     }
 }
+
+/// The original name for [`TransferProgress`], kept for source compatibility.
+pub type UploadProgress = TransferProgress;
 
 /// Wrap a tokio file in a byte-counting stream that reports progress through
 /// `progress` (if any) as chunks are read.

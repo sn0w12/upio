@@ -382,6 +382,7 @@ pub static GOFILE_SERVICE: ServiceDef = ServiceDef {
     capabilities: GoFileUploader::CAPABILITIES,
     max_file_size: GoFileUploader::MAX_FILE_SIZE,
     build,
+    download: None,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

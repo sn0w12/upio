@@ -286,6 +286,7 @@ pub static FILESTER_SERVICE: ServiceDef = ServiceDef {
     capabilities: FilesterUploader::CAPABILITIES,
     max_file_size: FilesterUploader::MAX_FILE_SIZE,
     build,
+    download: None,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

@@ -759,6 +759,7 @@ pub static BUNKR_SERVICE: ServiceDef = ServiceDef {
     capabilities: BunkrUploader::CAPABILITIES,
     max_file_size: BunkrUploader::MAX_FILE_SIZE,
     build,
+    download: None,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

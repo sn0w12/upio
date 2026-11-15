@@ -162,6 +162,7 @@ pub static FILEDITCH_SERVICE: ServiceDef = ServiceDef {
     capabilities: FileditchUploader::CAPABILITIES,
     max_file_size: FileditchUploader::MAX_FILE_SIZE,
     build,
+    download: None,
 };
 
 fn build(_config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

@@ -430,6 +430,7 @@ pub static GOONBOX_SERVICE: ServiceDef = ServiceDef {
     capabilities: GoonboxUploader::CAPABILITIES,
     max_file_size: GoonboxUploader::MAX_FILE_SIZE,
     build,
+    download: None,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

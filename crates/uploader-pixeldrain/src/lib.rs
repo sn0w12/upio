@@ -507,6 +507,7 @@ pub static PIXELDRAIN_SERVICE: ServiceDef = ServiceDef {
     capabilities: PixeldrainUploader::CAPABILITIES,
     max_file_size: PixeldrainUploader::MAX_FILE_SIZE,
     build,
+    download: None,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
