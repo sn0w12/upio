@@ -1,4 +1,4 @@
-use upio::registry::{build_uploader, BuildError, UploaderId};
+use upio::registry::{build_downloader, build_uploader, BuildError, UploaderId};
 use upio::UploaderEndpointConfig;
 
 #[test]
@@ -18,6 +18,26 @@ fn all_ids_have_names_and_capabilities() {
 #[test]
 fn unknown_name_resolves_to_none() {
     assert_eq!(UploaderId::from_name("nonexistent"), None);
+}
+
+#[test]
+fn unknown_urls_have_no_downloader() {
+    assert_eq!(UploaderId::from_url("https://example.test/file"), None);
+    assert_eq!(UploaderId::from_url("not a url"), None);
+}
+
+#[test]
+fn download_support_is_explicit_per_service() {
+    for id in UploaderId::ALL {
+        if id.supports_download() {
+            continue;
+        }
+        let err = match build_downloader(*id, &UploaderEndpointConfig::default()) {
+            Ok(_) => panic!("{} built a downloader without support", id.name()),
+            Err(error) => error,
+        };
+        assert!(matches!(err, BuildError::Unsupported(_)));
+    }
 }
 
 #[test]
