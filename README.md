@@ -368,8 +368,9 @@ Fileditch share pages gate their direct link behind a WebAssembly browser check.
 Its downloader runs a real Chrome to pass that check, reads the link the page
 assigns to its download button, and hands the public URL to the shared engine.
 Chrome must be installed. GoonBox and Fileditch share one profile at
-`<config-dir>/upio/chrome-profile`, so clearance cookies are paid for once. On
-headless Linux without a display, upio starts Xvfb when it is available.
+`<config-dir>/upio/chrome-profile`, so clearance cookies are paid for once.
+Chrome runs without a visible window: on Windows it starts on a separate
+desktop, and on headless Linux under Xvfb when it is available.
 
 ## GUI
 
@@ -394,7 +395,7 @@ controls are reachable by keyboard.
 | Crate                     | Purpose                                                                         |
 | ------------------------- | ------------------------------------------------------------------------------- |
 | `crates/core`             | Shared types, traits, errors, HTTP helpers, the download engine, and preprocessing. |
-| `crates/browser`          | Shared headed Chrome session, webdriver setup, and the one Chrome profile.      |
+| `crates/browser`          | Shared Chrome session, hidden desktop/Xvfb, and the one Chrome profile.         |
 | `crates/uploader-*bunkr*` | Uploader implementations.                                                       |
 | `crates/upio`             | Unified library: feature flags, the upload pipeline, and the service registry.  |
 | `crates/config`           | Config model, layered env/file reader, typed keys, and atomic writes.           |
