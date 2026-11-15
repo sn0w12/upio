@@ -1,6 +1,8 @@
 use std::fmt;
+use std::path::PathBuf;
 use std::str::FromStr;
 
+use upio_core::download::ConflictPolicy;
 use upio_core::UploaderEndpointConfig;
 
 use crate::config::Config;
@@ -10,6 +12,11 @@ use crate::ConfigError;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConfigKey {
     GlobalDisabledUploaders,
+    GlobalDisabledDownloaders,
+    GlobalDownloadOutputDir,
+    GlobalDownloadConcurrency,
+    GlobalDownloadResume,
+    GlobalDownloadOnConflict,
     BunkrToken,
     BunkrFolderId,
     GofileToken,
@@ -27,6 +34,11 @@ pub enum ConfigKey {
 impl ConfigKey {
     pub const ALL: &'static [ConfigKey] = &[
         Self::GlobalDisabledUploaders,
+        Self::GlobalDisabledDownloaders,
+        Self::GlobalDownloadOutputDir,
+        Self::GlobalDownloadConcurrency,
+        Self::GlobalDownloadResume,
+        Self::GlobalDownloadOnConflict,
         Self::BunkrToken,
         Self::BunkrFolderId,
         Self::GofileToken,
@@ -45,6 +57,11 @@ impl ConfigKey {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::GlobalDisabledUploaders => "global.disabled_uploaders",
+            Self::GlobalDisabledDownloaders => "global.disabled_downloaders",
+            Self::GlobalDownloadOutputDir => "global.download.output_dir",
+            Self::GlobalDownloadConcurrency => "global.download.concurrency",
+            Self::GlobalDownloadResume => "global.download.resume",
+            Self::GlobalDownloadOnConflict => "global.download.on_conflict",
             Self::BunkrToken => "bunkr.token",
             Self::BunkrFolderId => "bunkr.folder_id",
             Self::GofileToken => "gofile.token",
@@ -77,6 +94,17 @@ impl ConfigKey {
     pub fn get(self, config: &Config) -> String {
         match self {
             Self::GlobalDisabledUploaders => config.global.disabled_uploaders.join(", "),
+            Self::GlobalDisabledDownloaders => config.global.disabled_downloaders.join(", "),
+            Self::GlobalDownloadOutputDir => config
+                .global
+                .download
+                .output_dir
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_default(),
+            Self::GlobalDownloadConcurrency => config.global.download.concurrency.to_string(),
+            Self::GlobalDownloadResume => config.global.download.resume.to_string(),
+            Self::GlobalDownloadOnConflict => config.global.download.on_conflict.to_string(),
             Self::BunkrToken => token_of(&config.bunkr),
             Self::BunkrFolderId => folder_id_of(&config.bunkr),
             Self::GofileToken => token_of(&config.gofile),
@@ -110,6 +138,44 @@ impl ConfigKey {
                     .filter(|s| !s.is_empty())
                     .map(str::to_string)
                     .collect();
+            }
+            Self::GlobalDisabledDownloaders => {
+                config.global.disabled_downloaders = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+            }
+            Self::GlobalDownloadOutputDir => {
+                config.global.download.output_dir = opt(value).map(PathBuf::from);
+            }
+            Self::GlobalDownloadConcurrency => {
+                let concurrency = value.parse::<usize>().map_err(|_| {
+                    ConfigError::InvalidValue(format!(
+                        "invalid concurrency '{}': expected a positive integer",
+                        value
+                    ))
+                })?;
+                if concurrency == 0 {
+                    return Err(ConfigError::InvalidValue(
+                        "concurrency must be at least 1".to_string(),
+                    ));
+                }
+                config.global.download.concurrency = concurrency;
+            }
+            Self::GlobalDownloadResume => {
+                config.global.download.resume = value.parse::<bool>().map_err(|_| {
+                    ConfigError::InvalidValue(format!(
+                        "invalid resume value '{}': expected true or false",
+                        value
+                    ))
+                })?;
+            }
+            Self::GlobalDownloadOnConflict => {
+                config.global.download.on_conflict = value
+                    .parse::<ConflictPolicy>()
+                    .map_err(ConfigError::InvalidValue)?;
             }
             Self::BunkrToken => endpoint(&mut config.bunkr).token = opt(value),
             Self::BunkrFolderId => endpoint(&mut config.bunkr).folder_id = opt(value),

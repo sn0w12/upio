@@ -312,3 +312,117 @@ fn removed_fileditch_token_key_is_not_parseable() {
         assert_ne!(key.as_str(), "fileditch.token");
     }
 }
+
+#[test]
+fn download_settings_have_working_defaults() {
+    let config = Config::default();
+    assert!(config.global.download.output_dir.is_none());
+    assert_eq!(config.global.download.concurrency, 4);
+    assert!(config.global.download.resume);
+    assert_eq!(
+        config.global.download.on_conflict,
+        upio_core::download::ConflictPolicy::Rename
+    );
+    assert!(config.global.disabled_downloaders.is_empty());
+}
+
+#[test]
+fn download_settings_parse_from_toml() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let toml_str = r#"
+        [global]
+        disabled_downloaders = ["bunkr", "gofile"]
+
+        [global.download]
+        output_dir = "/tmp/upio"
+        concurrency = 2
+        resume = false
+        on_conflict = "skip"
+    "#;
+    std::fs::write(&path, toml_str).unwrap();
+
+    let config = Config::from_file(&path).unwrap();
+    assert_eq!(
+        config.global.disabled_downloaders,
+        vec!["bunkr".to_string(), "gofile".to_string()]
+    );
+    assert_eq!(
+        config.global.download.output_dir.as_deref(),
+        Some(std::path::Path::new("/tmp/upio"))
+    );
+    assert_eq!(config.global.download.concurrency, 2);
+    assert!(!config.global.download.resume);
+    assert_eq!(
+        config.global.download.on_conflict,
+        upio_core::download::ConflictPolicy::Skip
+    );
+}
+
+#[test]
+fn download_config_keys_roundtrip() {
+    let mut config = Config::default();
+
+    config
+        .set_value(&ConfigKey::GlobalDisabledDownloaders, "bunkr, gofile")
+        .unwrap();
+    assert_eq!(
+        config.get_value(&ConfigKey::GlobalDisabledDownloaders),
+        "bunkr, gofile"
+    );
+
+    config
+        .set_value(&ConfigKey::GlobalDownloadOutputDir, "/tmp/upio")
+        .unwrap();
+    assert_eq!(
+        config.get_value(&ConfigKey::GlobalDownloadOutputDir),
+        "/tmp/upio"
+    );
+
+    config
+        .set_value(&ConfigKey::GlobalDownloadConcurrency, "8")
+        .unwrap();
+    assert_eq!(config.get_value(&ConfigKey::GlobalDownloadConcurrency), "8");
+
+    config
+        .set_value(&ConfigKey::GlobalDownloadResume, "false")
+        .unwrap();
+    assert_eq!(config.get_value(&ConfigKey::GlobalDownloadResume), "false");
+
+    config
+        .set_value(&ConfigKey::GlobalDownloadOnConflict, "overwrite")
+        .unwrap();
+    assert_eq!(
+        config.get_value(&ConfigKey::GlobalDownloadOnConflict),
+        "overwrite"
+    );
+}
+
+#[test]
+fn invalid_download_config_values_are_errors() {
+    let mut config = Config::default();
+
+    assert!(config
+        .set_value(&ConfigKey::GlobalDownloadConcurrency, "0")
+        .is_err());
+    assert!(config
+        .set_value(&ConfigKey::GlobalDownloadConcurrency, "many")
+        .is_err());
+    assert!(config
+        .set_value(&ConfigKey::GlobalDownloadResume, "sometimes")
+        .is_err());
+    assert!(config
+        .set_value(&ConfigKey::GlobalDownloadOnConflict, "merge")
+        .is_err());
+}
+
+#[test]
+fn is_downloader_enabled_matches_exact_names_only() {
+    let disabled = vec!["bunkr".to_string(), "".to_string()];
+    assert!(!upio_config::is_downloader_enabled(&disabled, "bunkr"));
+    assert!(upio_config::is_downloader_enabled(&disabled, "gofile"));
+    assert!(upio_config::is_downloader_enabled(
+        &["bunk".to_string()],
+        "bunkr"
+    ));
+}
