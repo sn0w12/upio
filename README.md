@@ -14,7 +14,7 @@ Currently supported services:
 | Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | Yes      | All          |
 | GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | Yes      | All          |
 | Fileditch   | `uploader-fileditch`  | No            | No             | Yes      | All          |
-| Filester.me | `uploader-filester`   | Optional\*    | Yes            | No       | All          |
+| Filester.me | `uploader-filester`   | Optional\*    | Yes            | Yes      | All          |
 | GoonBox     | `uploader-goonbox`    | Yes           | Yes            | No       | Image        |
 | Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | No       | All          |
 

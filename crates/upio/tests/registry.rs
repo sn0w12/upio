@@ -62,6 +62,17 @@ fn gofile_share_urls_are_registered() {
     assert_eq!(downloader.name(), "gofile");
 }
 
+#[cfg(feature = "download")]
+#[test]
+fn filester_share_urls_are_registered() {
+    let id = UploaderId::from_url("https://filester.me/d/abc123").unwrap();
+    assert_eq!(id.name(), "filester");
+    assert!(id.supports_download());
+
+    let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
+    assert_eq!(downloader.name(), "filester");
+}
+
 #[test]
 fn download_support_is_explicit_per_service() {
     for id in UploaderId::ALL {
