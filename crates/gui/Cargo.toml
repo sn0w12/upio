@@ -1,28 +1,18 @@
 [package]
 name = "upio-gui"
-version = "0.1.0"
+description = "upio desktop GUI built with Rune and rune-kit"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 upio = { workspace = true }
 upio-config = { workspace = true }
-dioxus = { workspace = true }
-dioxus-icons = { workspace = true }
-dioxus-primitives = { workspace = true }
-tw_merge = { workspace = true, features = ["variant"]}
-tokio = { workspace = true, features = ["rt", "time"] }
+rune = { workspace = true }
+rune-kit = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+futures = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 toml = { workspace = true }
 dirs = { workspace = true }
-futures = { workspace = true }
-rfd = { workspace = true }
-arboard = { workspace = true }
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { workspace = true }
-
-[features]
-default = ["desktop"]
-desktop = ["dioxus/desktop"]
+walkdir = { workspace = true }

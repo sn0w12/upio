@@ -222,17 +222,19 @@ table, and tool requirements.
 
 ## GUI
 
-The Dioxus desktop app is in `crates/gui` (`upio-gui`). It shares
-`config.toml` with the CLI and keeps its own preferences (theme, window size,
-remembered services and concurrency) in `gui.toml` next to it.
+The desktop app is in `crates/gui` (`upio-gui`), built with
+[Rune](https://github.com/anomalyco/rune) and `rune-kit`. It shares
+`config.toml` with the CLI and keeps its own preferences (theme, selected
+services, concurrency) in `gui.toml` next to it.
 
 ```sh
-cargo install dioxus-cli   # once
-dx serve --platform desktop
+cargo run -p upio-gui
 ```
 
-The queue supports drag-and-drop with a confirm step, per-file per-service
-progress and outcomes, and a "Stop after current upload" button.
+Settings edits stay in a draft until you press **Save changes**; **Discard**
+restores the last saved config. The queue supports drag-and-drop with a confirm
+step, per-file per-service progress and outcomes, and a stop that cancels
+uploads in flight.
 
 ## Documentation
 

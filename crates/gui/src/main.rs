@@ -1,81 +1,154 @@
-use crate::components::settings::SettingsDialog;
-use crate::components::ui::toast::ToastProvider;
-use crate::state::config_store::ConfigProvider;
-use crate::state::gui_state::{GuiState, GuiStateProvider};
-use crate::state::upload_queue::UploadQueueProvider;
-use crate::theme::ThemeProvider;
-use dioxus::{
-    desktop::{Config, LogicalSize, WindowBuilder},
-    prelude::*,
-};
-use views::{Home, Layout};
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod components;
-#[cfg(windows)]
-mod platform;
-mod state;
+mod app;
+mod coss;
 mod theme;
-mod utils;
-mod views;
+mod ui;
+mod worker;
 
-#[derive(Debug, Clone, Routable, PartialEq)]
-#[rustfmt::skip]
-enum Route {
-    #[layout(Layout)]
-    #[route("/")]
-    Home {},
+use std::path::PathBuf;
+
+use rune::{App, AppSpec, Cx, El, Titlebar};
+use upio::registry::UploaderId;
+use upio_config::ConfigKey;
+
+use crate::app::{
+    App as State, ItemStatus, OutcomeState, Page, QueueItem, ServiceOutcome, SettingsSection,
+};
+
+fn view(state: &State, cx: &mut Cx<State>) -> El {
+    ui::view(state, cx)
 }
-
-const FAVICON: Asset = asset!("/assets/favicon.ico");
-const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
-const GEIST_SANS: Asset = asset!("/assets/fonts/GeistVariable.woff2");
-const GEIST_MONO: Asset = asset!("/assets/fonts/GeistMonoVariable.woff2");
 
 fn main() {
-    // Bootstrap the window from the last persisted geometry when it can be
-    // read; a malformed file must not block startup (the provider surfaces
-    // the error in-app).
-    let window = GuiState::load().unwrap_or_default().window;
-    dioxus::LaunchBuilder::new()
-        .with_cfg(desktop! {
-            Config::new()
-                .with_disable_context_menu(false)
-                .with_menu(None)
-                .with_window(
-                WindowBuilder::new()
-                    .with_title("Upio")
-                    .with_inner_size(LogicalSize::new(window.width, window.height))
-                    .with_maximized(window.maximized)
-                    .with_decorations(true),
-            )
-        })
-        .launch(App);
+    let _ = rune::set_app_icon(include_bytes!("../assets/brand/logo.png").to_vec());
+
+    let mut spec = AppSpec::new("upio", (1040.0, 720.0), State::new, view);
+    spec.min_size = Some((880.0, 600.0));
+    spec.scenes = SCENES;
+    spec.poll = Some(app::poll);
+
+    let app = App::new(spec).titlebar(Titlebar::new(32.0));
+    rune::set_app_id("upio");
+    worker::start(app.handle());
+    app.run();
 }
 
-#[component]
-fn App() -> Element {
-    rsx! {
-        document::Link { rel: "icon", href: FAVICON }
-        document::Link { rel: "stylesheet", href: TAILWIND_CSS }
-        style { "{font_faces()}" }
-        ToastProvider {
-            GuiStateProvider {
-                ThemeProvider {
-                    ConfigProvider {
-                        UploadQueueProvider {
-                            Router::<Route> {}
-                            SettingsDialog {}
-                        }
-                    }
-                }
-            }
+type Scene = (&'static str, fn(&mut State));
+
+const SCENES: &[Scene] = &[
+    ("upload", |_| {}),
+    ("upload-queue", queue),
+    ("upload-services", |s| {
+        s.open = Some("destinations".to_string());
+    }),
+    ("upload-details", |s| {
+        queue(s);
+        s.open = Some("queue-1".to_string());
+    }),
+    ("upload-pending", |s| {
+        queue(s);
+        s.queue[2].status = ItemStatus::Pending;
+        for outcome in &mut s.queue[2].outcomes {
+            outcome.state = OutcomeState::Waiting;
+            outcome.progress = None;
         }
-    }
-}
+        s.open = Some("queue-3".to_string());
+    }),
+    ("upload-plain", |s| {
+        for key in [
+            ConfigKey::BunkrToken,
+            ConfigKey::PixeldrainToken,
+            ConfigKey::GoonboxUsername,
+        ] {
+            let _ = s.config.set_value(&key, "");
+        }
+        s.services = s.active_services();
+    }),
+    ("settings-setup", |s| {
+        s.page = Page::Settings;
+        s.settings_section = SettingsSection::Services;
+        s.settings_service = UploaderId::from_name("bunkr").unwrap();
+        let _ = s.config.set_value(&ConfigKey::BunkrToken, "");
+    }),
+    ("settings-appearance", |s| {
+        s.page = Page::Settings;
+        s.settings_section = SettingsSection::Appearance;
+    }),
+    ("settings-services", |s| {
+        s.page = Page::Settings;
+    }),
+    ("settings-preprocessing", |s| {
+        s.page = Page::Settings;
+        s.settings_section = SettingsSection::Preprocessing;
+    }),
+    ("settings-tools", |s| {
+        s.page = Page::Settings;
+        s.settings_section = SettingsSection::Tools;
+    }),
+    ("settings-advanced", |s| {
+        s.page = Page::Settings;
+        s.settings_section = SettingsSection::Advanced;
+    }),
+];
 
-fn font_faces() -> String {
-    format!(
-        "@font-face {{ font-family: \"Geist Variable\"; font-style: normal; font-weight: 100 900; font-display: swap; src: url(\"{GEIST_SANS}\") format(\"woff2\"); }} \
-         @font-face {{ font-family: \"Geist Mono Variable\"; font-style: normal; font-weight: 100 900; font-display: swap; src: url(\"{GEIST_MONO}\") format(\"woff2\"); }}",
-    )
+fn queue(s: &mut State) {
+    let services = s.services.clone();
+    let outcome = |service: UploaderId, state: OutcomeState| ServiceOutcome {
+        service,
+        state,
+        progress: None,
+        urls: Vec::new(),
+        error: None,
+    };
+
+    let mut first: Vec<ServiceOutcome> = services
+        .iter()
+        .copied()
+        .map(|id| outcome(id, OutcomeState::Done))
+        .collect();
+    for item in &mut first {
+        item.urls = vec![format!("https://example.test/{}", item.service.name())];
+    }
+    let mut second: Vec<ServiceOutcome> = services
+        .iter()
+        .copied()
+        .map(|id| outcome(id, OutcomeState::Waiting))
+        .collect();
+    if let Some(item) = second.first_mut() {
+        item.state = OutcomeState::Failed;
+        item.error = Some("token rejected".to_string());
+    }
+
+    s.queue = vec![
+        QueueItem {
+            id: 1,
+            path: PathBuf::from("holiday-clip.mp4"),
+            size: 84_000_000,
+            status: ItemStatus::Done,
+            outcomes: first,
+        },
+        QueueItem {
+            id: 2,
+            path: PathBuf::from("interview-audio.flac"),
+            size: 310_000_000,
+            status: ItemStatus::Failed,
+            outcomes: second,
+        },
+        QueueItem {
+            id: 3,
+            path: PathBuf::from("screenshots.zip"),
+            size: 12_500_000,
+            status: ItemStatus::Working,
+            outcomes: services
+                .iter()
+                .copied()
+                .map(|id| outcome(id, OutcomeState::Waiting))
+                .collect(),
+        },
+    ];
+    if let Some(item) = s.queue[2].outcomes.first_mut() {
+        item.state = OutcomeState::Uploading;
+        item.progress = Some((7_400_000, 12_500_000));
+    }
 }
