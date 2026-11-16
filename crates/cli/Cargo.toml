@@ -19,6 +19,7 @@ upio-config = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 futures = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 terminal_size = { workspace = true }
 tokio = { workspace = true }

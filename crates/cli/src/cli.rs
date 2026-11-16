@@ -194,21 +194,22 @@ pub enum DemoAction {
 
 #[derive(Debug, Subcommand)]
 pub enum ConfigAction {
-    /// Get a config value or all values
+    /// Show the configuration, or a single value
     Get {
-        /// Optional key to get
+        /// Optional key to get, e.g. bunkr.token
         key: Option<String>,
         /// Show secret values (tokens) in full instead of masking them
         #[arg(long)]
         show_secrets: bool,
     },
+    /// Set a config value (use `none` to clear it)
     Set {
         /// Config key (e.g., bunkr.token, global.disabled_uploaders)
         key: String,
         /// Value
         value: String,
     },
-    /// Show the config file path
+    /// Print the config file path
     Path,
 }
 

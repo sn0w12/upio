@@ -114,6 +114,79 @@ fn config_path_runs() {
 }
 
 #[test]
+fn config_set_writes_and_get_reads() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let path = path.to_str().unwrap();
+
+    Command::cargo_bin("upio")
+        .unwrap()
+        .args(["--config", path, "config", "set", "gofile.server", "store4"])
+        .assert()
+        .success();
+
+    let output = Command::cargo_bin("upio")
+        .unwrap()
+        .args(["--config", path, "config", "get", "gofile.server"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "store4");
+}
+
+#[test]
+fn config_get_masks_secrets() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    let path = path.to_str().unwrap();
+
+    Command::cargo_bin("upio")
+        .unwrap()
+        .args([
+            "--config",
+            path,
+            "config",
+            "set",
+            "pixeldrain.token",
+            "pd-secret",
+        ])
+        .assert()
+        .success();
+
+    let masked = Command::cargo_bin("upio")
+        .unwrap()
+        .args(["--config", path, "config", "get", "pixeldrain.token"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&masked.stdout).trim(), "[REDACTED]");
+
+    let shown = Command::cargo_bin("upio")
+        .unwrap()
+        .args([
+            "--config",
+            path,
+            "config",
+            "get",
+            "--show-secrets",
+            "pixeldrain.token",
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8_lossy(&shown.stdout).trim(), "pd-secret");
+}
+
+#[test]
+fn config_get_suggests_nearby_keys() {
+    let output = Command::cargo_bin("upio")
+        .unwrap()
+        .args(["config", "get", "bunkr.tokn"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("did you mean 'bunkr.token'"));
+}
+
+#[test]
 fn unknown_command_fails() {
     let mut cmd = Command::cargo_bin("upio").unwrap();
     cmd.arg("bogus").assert().failure();

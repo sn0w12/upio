@@ -133,15 +133,18 @@ Manage the configuration file.
 
 ```sh
 upio config path                     # print the config file location
-upio config get                      # dump the whole config
+upio config get                      # grouped summary of every key
 upio config get bunkr.token          # one value (secrets masked)
-upio config get --show-secrets       # dump the whole config unmasked
+upio config get --show-secrets       # grouped summary with secrets in full
 upio config set gofile.token <token>
 upio config set gofile.folder_id 123
 upio config set global.disabled_uploaders "filester"
 ```
 
-Setting a value to `none` clears it. Secret values are masked by default; pass
+`config get` prints the grouped summary when stdout is a terminal and raw TOML
+otherwise, so scripts and pipes keep working. The summary also lists each
+service's preprocessing state and rules. Setting a value to `none` clears it.
+Secret values are masked by default, including in the TOML output; pass
 `--show-secrets` to print them in full. Writes are atomic.
 
 ### `list`
