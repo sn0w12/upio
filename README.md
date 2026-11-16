@@ -47,9 +47,15 @@ upio config set bunkr.token <your-token>
 upio upload -u bunkr video.mp4
 ```
 
+Download a share link:
+
+```sh
+upio download 'https://pixeldrain.com/u/<id>'
+```
+
 ## Command line
 
-The CLI has four subcommands. Running `upio <file>...` with no subcommand
+The CLI has five subcommands. Running `upio <file>...` with no subcommand
 also uploads.
 
 ### `upload`
@@ -99,6 +105,44 @@ A successful upload that the service answers without a usable URL counts as
 failed; the pipeline never reports success with no URL. If preprocessing
 created temporary files and cleanup fails after the upload, the URLs are kept
 but the row still reports the cleanup error.
+
+### `download`
+
+Download files from a share URL. The service is chosen from the URL, and the
+matching service config supplies credentials, so private content and
+password-protected folders use the same settings as uploads.
+
+```sh
+# Download a file or folder into the current directory
+upio download 'https://filester.me/f/<id>'
+
+# Choose an output directory
+upio download -o downloads 'https://pixeldrain.com/u/<id>'
+
+# Unlock a password-protected folder
+upio download -p 'folder-password' 'https://gofile.io/d/<id>'
+
+# Resolve and print the planned destinations without transferring
+upio download --dry-run 'https://gofile.io/d/<id>'
+
+# Drop remote folder names, and skip files that already exist
+upio download --flat --on-conflict skip 'https://filester.me/f/<id>'
+```
+
+| Flag                   | Description                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------- |
+| `-o, --output`         | Output directory. Defaults to `global.download.output_dir`, then the current directory.         |
+| `-c, --concurrency`    | Maximum concurrent files. Defaults to `global.download.concurrency`.                            |
+| `--no-resume`          | Start partial files over instead of resuming them.                                             |
+| `--on-conflict`        | `rename`, `skip`, or `overwrite`. Defaults to `global.download.on_conflict`.                    |
+| `-p, --password`       | Password for protected links that do not already carry `?password=`.                            |
+| `--flat`               | Put every file directly in the output directory instead of preserving remote folder names.      |
+| `--dry-run`            | Resolve URLs and print the destination plan without writing files.                              |
+
+A `?password=` query parameter on a share URL takes precedence over `-p` and
+the service's `link_password` config value. `global.disabled_downloaders`
+disables a service by name. The command exits non-zero if any URL has no
+downloader, fails to resolve, or fails to transfer.
 
 ### `config`
 

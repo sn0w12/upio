@@ -15,6 +15,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Some(Commands::Upload { args }) => commands::upload::run(args, config_path).await?,
+        Some(Commands::Download { args }) => commands::download::run(args, config_path).await?,
         Some(Commands::Config { action }) => commands::config::run(action, config_path)?,
         Some(Commands::List) => commands::list::run(config_path)?,
         Some(Commands::Preprocess {

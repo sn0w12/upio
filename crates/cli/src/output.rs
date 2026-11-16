@@ -1,4 +1,8 @@
+use std::path::Path;
+
 use tiny_table::{Align, Cell, Column, Table};
+use upio::download::DownloadResult;
+use upio::filesize::FileSize;
 
 /// Results of one uploader's batch, ready for display.
 #[derive(Debug)]
@@ -75,6 +79,144 @@ pub fn print_upload(results: &[UploaderResult]) {
         let failed = result.rows.len() - ok;
         println!("{}: {} uploaded, {} failed", result.name, ok, failed);
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DownloadOutcome {
+    Downloaded,
+    Skipped,
+    Planned,
+    Failed,
+}
+
+pub struct DownloadRow {
+    pub file: String,
+    pub destination: String,
+    pub status: String,
+    pub outcome: DownloadOutcome,
+}
+
+impl DownloadRow {
+    pub fn failure(status: impl Into<String>) -> Self {
+        Self {
+            file: "-".to_string(),
+            destination: "-".to_string(),
+            status: status.into(),
+            outcome: DownloadOutcome::Failed,
+        }
+    }
+
+    pub fn planned(destination: &Path) -> Self {
+        Self {
+            file: file_name(destination),
+            destination: destination.display().to_string(),
+            status: "planned".to_string(),
+            outcome: DownloadOutcome::Planned,
+        }
+    }
+
+    pub fn from_result(result: DownloadResult) -> Self {
+        let DownloadResult {
+            destination,
+            bytes,
+            skipped,
+            error,
+            ..
+        } = result;
+        let file = file_name(&destination);
+        let destination = destination.display().to_string();
+
+        match (error, skipped) {
+            (Some(error), _) => Self {
+                file,
+                destination,
+                status: error,
+                outcome: DownloadOutcome::Failed,
+            },
+            (None, true) => Self {
+                file,
+                destination,
+                status: "skipped".to_string(),
+                outcome: DownloadOutcome::Skipped,
+            },
+            (None, false) => Self {
+                file,
+                destination,
+                status: format!("ok ({})", FileSize::from_bytes(bytes).to_human_string()),
+                outcome: DownloadOutcome::Downloaded,
+            },
+        }
+    }
+}
+
+pub struct DownloadBatch {
+    pub label: String,
+    pub rows: Vec<DownloadRow>,
+}
+
+fn file_name(path: &Path) -> String {
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string())
+}
+
+/// Print one row per file, then a downloaded/skipped/failed summary.
+pub fn print_download(batches: &[DownloadBatch]) {
+    let mut table = Table::with_columns(vec![
+        Column::new("source").align(Align::Left),
+        Column::new("file").align(Align::Left),
+        Column::new("destination").align(Align::Left),
+        Column::new("status").align(Align::Left),
+    ]);
+
+    for batch in batches {
+        if batch.rows.is_empty() {
+            table.add_row(vec![
+                Cell::new(&batch.label),
+                Cell::new("-"),
+                Cell::new("-"),
+                Cell::new("no files").yellow(),
+            ]);
+        } else {
+            for row in &batch.rows {
+                let status = match row.outcome {
+                    DownloadOutcome::Downloaded => Cell::new(&row.status).green(),
+                    DownloadOutcome::Skipped | DownloadOutcome::Planned => {
+                        Cell::new(&row.status).yellow()
+                    }
+                    DownloadOutcome::Failed => Cell::new(&row.status).red(),
+                };
+                table.add_row(vec![
+                    Cell::new(&batch.label),
+                    Cell::new(&row.file),
+                    Cell::new(&row.destination),
+                    status,
+                ]);
+            }
+        }
+    }
+
+    table.print();
+
+    let mut downloaded = 0usize;
+    let mut skipped = 0usize;
+    let mut planned = 0usize;
+    let mut failed = 0usize;
+    for row in batches.iter().flat_map(|batch| &batch.rows) {
+        match row.outcome {
+            DownloadOutcome::Downloaded => downloaded += 1,
+            DownloadOutcome::Skipped => skipped += 1,
+            DownloadOutcome::Planned => planned += 1,
+            DownloadOutcome::Failed => failed += 1,
+        }
+    }
+    if planned > 0 {
+        println!("{} planned", planned);
+    }
+    println!(
+        "{} downloaded, {} skipped, {} failed",
+        downloaded, skipped, failed
+    );
 }
 
 /// Print a table of `[name, status, detail]` rows with colored statuses.
