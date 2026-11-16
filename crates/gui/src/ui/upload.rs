@@ -1,5 +1,5 @@
 use rune::{col, el, icon, row, spacer, text, Color, El, FileDialogOptions, ScrollSpec, Tx};
-use rune_kit::glyphs;
+use rune_kit::IconButtonVariant;
 use rune_kit::{
     Button, ButtonVariant, Checkbox, ControlSize, IconButton, Kit, Popover, Select,
     SelectAppearance, TextInput,
@@ -8,7 +8,7 @@ use upio::filesize::FileSize;
 
 use crate::app::{App, ItemStatus, OutcomeState, Page, QueueItem, ServiceOutcome};
 
-use super::{copy_button, notice, page_header};
+use super::{copy_button, notice};
 
 const CONCURRENCY: [&str; 4] = ["Sequential", "2 at a time", "4 at a time", "8 at a time"];
 
@@ -18,29 +18,8 @@ pub fn view(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
         .grow(1.0)
         .min_w(0.0)
         .h_full()
-        .px(18.0)
-        .py(14.0)
-        .gap(10.0)
-        .child(
-            row()
-                .key("upload-header")
-                .w_full()
-                .justify_between()
-                .center_y()
-                .gap(12.0)
-                .child(page_header(
-                    k,
-                    "Upload",
-                    "Drop files, pick destinations, then review the queue.",
-                ))
-                .child(
-                    Button::new("Settings")
-                        .variant(ButtonVariant::Ghost)
-                        .control_size(ControlSize::Small)
-                        .on_press(|s: &mut App| s.set_page(Page::Settings))
-                        .build(k),
-                ),
-        );
+        .padding(12.0)
+        .gap(10.0);
 
     if let Some(notice) = notice(s, k) {
         page = page.child(notice);
@@ -67,7 +46,11 @@ fn empty_dropzone(s: &App, k: &Kit) -> El {
         .gap(6.0)
         .radius(k.radius.lg)
         .fill(if hovering { k.c.layer_02 } else { k.c.layer_01 })
-        .hover(k.c.layer_02)
+        .hover(if s.open.is_none() {
+            k.c.layer_02
+        } else {
+            Color::TRANSPARENT
+        })
         .border(
             if hovering { 1.5 } else { 1.0 },
             if hovering {
@@ -89,11 +72,9 @@ fn empty_dropzone(s: &App, k: &Kit) -> El {
             tx.live_only();
         })
         .child(
-            el().size(44.0, 44.0)
+            el().size(38.0, 38.0)
                 .center()
-                .radius(22.0)
-                .fill(k.c.layer_03)
-                .child(icon(&glyphs::FILE, 20.0).color(k.c.icon_muted)),
+                .child(icon(&crate::ui::icons::FILE, 32.0).color(k.c.icon_muted)),
         )
         .child(
             text("Drop files or folders here")
@@ -119,7 +100,11 @@ fn dropzone(s: &App, k: &Kit) -> El {
         .center_y()
         .radius(k.radius.lg)
         .fill(if hovering { k.c.layer_02 } else { k.c.layer_01 })
-        .hover(k.c.layer_02)
+        .hover(if s.open.is_none() {
+            k.c.layer_02
+        } else {
+            Color::TRANSPARENT
+        })
         .border(
             if hovering { 1.5 } else { 1.0 },
             if hovering {
@@ -140,13 +125,6 @@ fn dropzone(s: &App, k: &Kit) -> El {
             s.drop_hover = over;
             tx.live_only();
         })
-        .child(
-            el().size(30.0, 30.0)
-                .center()
-                .radius(15.0)
-                .fill(k.c.layer_03)
-                .child(icon(&glyphs::FILE, 15.0).color(k.c.icon_muted)),
-        )
         .child(
             col()
                 .gap(1.0)
@@ -175,7 +153,7 @@ fn destinations(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
 
     let trigger = Button::new(summary)
         .variant(ButtonVariant::Outline)
-        .control_size(ControlSize::Small)
+        .control_size(ControlSize::Large)
         .on_press(|s: &mut App| s.toggle_open("destinations"))
         .build(k);
 
@@ -241,11 +219,6 @@ fn destinations(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
         .w_full()
         .gap(10.0)
         .center_y()
-        .child(
-            text("Send to")
-                .font(k.ty.small_medium)
-                .color(k.c.text_muted),
-        )
         .child(picker)
         .child(spacer())
         .child(
@@ -270,6 +243,14 @@ fn destinations(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
                     s.close_open();
                 })
                 .build(k, layer),
+        )
+        .child(
+            IconButton::new(&crate::ui::icons::SETTINGS)
+                .label("Settings")
+                .variant(IconButtonVariant::Contrast)
+                .control_size(ControlSize::Large)
+                .on_press(|s: &mut App| s.set_page(Page::Settings))
+                .build(k),
         )
 }
 
@@ -362,7 +343,7 @@ fn item_row(s: &App, k: &Kit, item: &QueueItem) -> El {
         .py(8.0)
         .gap(8.0)
         .center_y()
-        .child(icon(&glyphs::FILE, 15.0).color(k.c.icon_muted))
+        .child(icon(&crate::ui::icons::FILE, 15.0).color(k.c.icon_muted))
         .child(
             text(item.file_name())
                 .font(k.ty.ui_medium)

@@ -4,11 +4,12 @@ mod app;
 mod coss;
 mod theme;
 mod ui;
+mod window_theme;
 mod worker;
 
 use std::path::PathBuf;
 
-use rune::{App, AppSpec, Cx, El, Titlebar};
+use rune::{App, AppSpec, Cx, El};
 use upio::registry::UploaderId;
 use upio_config::ConfigKey;
 
@@ -28,7 +29,7 @@ fn main() {
     spec.scenes = SCENES;
     spec.poll = Some(app::poll);
 
-    let app = App::new(spec).titlebar(Titlebar::new(32.0));
+    let app = App::new(spec);
     rune::set_app_id("upio");
     worker::start(app.handle());
     app.run();
@@ -77,10 +78,7 @@ const SCENES: &[Scene] = &[
     }),
     ("settings-services", |s| {
         s.page = Page::Settings;
-    }),
-    ("settings-preprocessing", |s| {
-        s.page = Page::Settings;
-        s.settings_section = SettingsSection::Preprocessing;
+        s.settings_section = SettingsSection::Services;
     }),
     ("settings-tools", |s| {
         s.page = Page::Settings;

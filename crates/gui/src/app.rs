@@ -21,16 +21,14 @@ pub enum Page {
 pub enum SettingsSection {
     Appearance,
     Services,
-    Preprocessing,
     Tools,
     Advanced,
 }
 
 impl SettingsSection {
-    pub const ALL: [SettingsSection; 5] = [
+    pub const ALL: [SettingsSection; 4] = [
         Self::Appearance,
         Self::Services,
-        Self::Preprocessing,
         Self::Tools,
         Self::Advanced,
     ];
@@ -39,7 +37,6 @@ impl SettingsSection {
         match self {
             Self::Appearance => "Appearance",
             Self::Services => "Services",
-            Self::Preprocessing => "Preprocessing",
             Self::Tools => "Tools",
             Self::Advanced => "Advanced",
         }
@@ -155,6 +152,7 @@ pub struct App {
     pub settings_section: SettingsSection,
     pub theme: ThemeMode,
     pub open: Option<String>,
+    pub show_raw: bool,
     pub revealed: HashSet<ConfigKey>,
 
     pub config: Config,
@@ -205,7 +203,10 @@ impl App {
         if services.is_empty() {
             services = active.clone();
         }
-        let settings_service = services.first().copied().unwrap_or(UploaderId::ALL[0]);
+        let settings_service = enabled_services(&config)
+            .first()
+            .copied()
+            .unwrap_or(UploaderId::ALL[0]);
 
         let edits = ConfigKey::ALL
             .iter()
@@ -215,9 +216,10 @@ impl App {
 
         let mut app = Self {
             page: Page::Upload,
-            settings_section: SettingsSection::Services,
+            settings_section: SettingsSection::Appearance,
             theme: prefs.theme,
             open: None,
+            show_raw: false,
             revealed: HashSet::new(),
             config,
             baseline: Config::default(),
@@ -628,6 +630,11 @@ impl App {
             .rules
             .iter()
             .any(|rule| rule.strategy == strategy)
+    }
+
+    pub fn toggle_preprocess_strategy(&mut self, id: UploaderId, strategy: PreprocessStrategy) {
+        let on = !self.preprocess_has(id, strategy);
+        self.toggle_preprocess(id, strategy, on);
     }
 
     pub fn commit_field(&mut self, key: ConfigKey) {
