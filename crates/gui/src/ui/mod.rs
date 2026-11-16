@@ -5,8 +5,8 @@ mod icons {
     include!(concat!(env!("OUT_DIR"), "/icons.rs"));
 }
 
-use rune::{col, row, text, Cx, El, Tx};
-use rune_kit::{ControlSize, IconButton, Kit, SegmentedControl};
+use rune::{col, row, text, Cx, El};
+use rune_kit::{Kit, SegmentedControl};
 
 use crate::app::{App, Page};
 use crate::theme::ThemeMode;
@@ -85,12 +85,4 @@ pub fn theme_picker(s: &App, k: &Kit) -> El {
         });
     })
     .build(k)
-}
-
-pub fn copy_button(k: &Kit, value: String, label: &str) -> El {
-    IconButton::new(k.glyph.copy)
-        .label(label)
-        .control_size(ControlSize::Mini)
-        .on_press_tx(move |_: &mut App, tx: &mut Tx| tx.copy(value.clone()))
-        .build(k)
 }

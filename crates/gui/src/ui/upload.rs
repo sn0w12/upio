@@ -8,7 +8,7 @@ use upio::filesize::FileSize;
 
 use crate::app::{App, ItemStatus, OutcomeState, Page, QueueItem, ServiceOutcome};
 
-use super::{copy_button, notice};
+use super::notice;
 
 const CONCURRENCY: [&str; 4] = ["Sequential", "2 at a time", "4 at a time", "8 at a time"];
 
@@ -374,6 +374,16 @@ fn item_row(s: &App, k: &Kit, item: &QueueItem) -> El {
         )
         .child(outcome_dots(item, k));
 
+    if item.status == ItemStatus::Pending {
+        head = head.child(
+            IconButton::new(&crate::ui::icons::TRASH)
+                .label("Remove from queue")
+                .variant(IconButtonVariant::GhostMuted)
+                .on_press(move |s: &mut App| s.discard(id))
+                .build(k),
+        );
+    }
+
     head = head.child(
         IconButton::new(if expanded {
             k.glyph.chevron_up
@@ -381,6 +391,7 @@ fn item_row(s: &App, k: &Kit, item: &QueueItem) -> El {
             k.glyph.chevron_down
         })
         .label("Upload details")
+        .variant(IconButtonVariant::Ghost)
         .on_press(move |s: &mut App| s.toggle_open(&key))
         .build(k),
     );
@@ -395,35 +406,11 @@ fn item_row(s: &App, k: &Kit, item: &QueueItem) -> El {
         })
         .child(head);
     if expanded {
-        let mut details = col()
-            .key("details")
-            .w_full()
-            .gap(1.0)
-            .px(33.0)
-            .pt(6.0)
-            .pb(10.0);
+        let mut details = col().key("details").w_full().gap(2.0).pt(2.0).pb(6.0);
         for outcome in &item.outcomes {
             details = details.child(outcome_lines(outcome, k));
         }
-        if item.status == ItemStatus::Pending {
-            details = details.child(
-                row().pt(4.0).child(
-                    Button::new("Remove from queue")
-                        .variant(ButtonVariant::Ghost)
-                        .control_size(ControlSize::Mini)
-                        .on_press(move |s: &mut App| s.discard(id))
-                        .build(k),
-                ),
-            );
-        }
-        block = block
-            .child(
-                row()
-                    .w_full()
-                    .pl(33.0)
-                    .child(el().grow(1.0).h(1.0).fill(k.c.border_base)),
-            )
-            .child(details);
+        block = block.child(details);
     }
     block
 }
@@ -449,11 +436,22 @@ fn outcome_lines(outcome: &ServiceOutcome, k: &Kit) -> El {
         OutcomeState::Cancelled => ("cancelled".to_string(), k.c.text_faint),
     };
 
-    let labels = |first: bool, k: &Kit| {
+    let slot = |first: bool| {
+        let mut slot = row().size(15.0, 15.0).center();
+        if first {
+            slot = slot.child(el().size(5.0, 5.0).radius(2.5).fill(color).a11y_hidden());
+        }
+        slot
+    };
+
+    let line = |first: bool, k: &Kit| {
         row()
+            .w_full()
+            .pl(10.0)
+            .pr(14.0)
             .gap(8.0)
-            .h(20.0)
             .center_y()
+            .child(slot(first))
             .child(
                 text(if first {
                     outcome.service.def().display_name.to_string()
@@ -464,52 +462,53 @@ fn outcome_lines(outcome: &ServiceOutcome, k: &Kit) -> El {
                 .color(k.c.text_muted)
                 .w(86.0),
             )
-            .child(
-                text(if first { state.clone() } else { String::new() })
-                    .font(k.ty.caption())
-                    .color(color)
-                    .w(58.0),
-            )
+            .child(spacer())
     };
+
+    let state_text = |k: &Kit| text(state.clone()).font(k.ty.caption()).color(color);
 
     let mut lines = col()
         .key(format!("outcome-{}", outcome.service.name()))
         .w_full()
-        .gap(1.0);
+        .gap(2.0);
 
     if matches!(outcome.state, OutcomeState::Done) {
         for (index, url) in outcome.urls.iter().enumerate() {
+            let link = url.clone();
             lines = lines.child(
-                labels(index == 0, k)
-                    .grow(1.0)
+                line(index == 0, k)
                     .child(
                         text(url.clone())
                             .font(k.ty.caption())
                             .color(k.c.text_muted)
                             .selectable(true)
-                            .grow(1.0)
-                            .shrink()
+                            .max_w(440.0)
                             .truncate(),
                     )
-                    .child(copy_button(k, url.clone(), "Copy link")),
+                    .child(
+                        IconButton::new(&crate::ui::icons::COPY)
+                            .label("Copy link")
+                            .variant(IconButtonVariant::GhostMuted)
+                            .on_press_tx(move |_: &mut App, tx: &mut Tx| tx.copy(link.clone()))
+                            .build(k),
+                    ),
             );
         }
         if outcome.urls.is_empty() {
-            lines = lines.child(labels(true, k));
+            lines = lines.child(line(true, k).child(state_text(k)));
         }
     } else if let Some(error) = &outcome.error {
         lines = lines.child(
-            labels(true, k).grow(1.0).child(
+            line(true, k).help(error.clone()).child(
                 text(error.clone())
                     .font(k.ty.caption())
                     .color(k.c.danger.fg)
-                    .grow(1.0)
-                    .shrink()
+                    .max_w(520.0)
                     .truncate(),
             ),
         );
     } else {
-        lines = lines.child(labels(true, k));
+        lines = lines.child(line(true, k).child(state_text(k)));
     }
     lines
 }
