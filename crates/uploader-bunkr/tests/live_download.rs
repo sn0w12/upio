@@ -7,7 +7,10 @@ use uploader_bunkr::BunkrDownloader;
 #[ignore = "requires a live Bunkr file or album URL in UPIO_BUNKR_URL"]
 async fn resolves_a_live_share_url() {
     let url = std::env::var("UPIO_BUNKR_URL").expect("set UPIO_BUNKR_URL");
-    let downloader = BunkrDownloader::new();
+    let downloader = match std::env::var("UPIO_BUNKR_TOKEN") {
+        Ok(token) => BunkrDownloader::with_token(&token),
+        Err(_) => BunkrDownloader::new(),
+    };
     let node = downloader
         .resolve(&url, &Default::default())
         .await

@@ -1,16 +1,20 @@
 //! GoonBox download resolution.
 //!
-//! GoonBox serves public pages as a React shell. The data comes from
-//! unauthenticated JSON endpoints: single images, album pages, and profile
-//! image listings. Originals live on a separate CDN that requires a GoonBox
-//! referer and supports range requests.
+//! GoonBox serves public pages as a React shell. The data comes from JSON
+//! endpoints: single images, album pages, and profile image listings. An API
+//! key or an account bearer reaches link-only albums and images; the keyed API
+//! lives under `/api/v1`, the session API under `/api`. Originals live on a
+//! separate CDN that requires a GoonBox referer and supports range requests.
+
+use std::sync::Arc;
 
 use async_trait::async_trait;
-use reqwest::header::{REFERER, USER_AGENT};
+use reqwest::header::{HeaderValue, AUTHORIZATION, REFERER, USER_AGENT};
 use reqwest::{Client, Url};
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::login::{Credentials, Session};
 use upio_core::download::{Downloader, ParsedUrl, RemoteFile, RemoteNode, ResourceKind};
 use upio_core::error::UpioError;
 use upio_core::http::map_reqwest_error;
@@ -18,9 +22,8 @@ use upio_core::service::DownloadDef;
 use upio_core::types::UploaderEndpointConfig;
 
 const BASE_URL: &str = "https://goonbox.cr";
-const IMAGE_API: &str = "https://goonbox.cr/api/images";
-const ALBUM_API: &str = "https://goonbox.cr/api/albums";
-const USER_API: &str = "https://goonbox.cr/api/users";
+const API_BASE: &str = "https://goonbox.cr/api";
+const API_V1_BASE: &str = "https://goonbox.cr/api/v1";
 const USER_PAGE_SIZE: u32 = 100;
 const MAX_REDIRECTS: usize = 3;
 
@@ -91,6 +94,8 @@ struct Pagination {
 
 pub struct GoonboxDownloader {
     client: Client,
+    api_key: Option<String>,
+    session: Option<Arc<Session>>,
 }
 
 impl GoonboxDownloader {
@@ -99,20 +104,111 @@ impl GoonboxDownloader {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
+            api_key: None,
+            session: None,
         }
     }
 
-    async fn fetch_json(&self, url: &str) -> Result<Value, UpioError> {
+    pub fn with_token(token: &str) -> Self {
+        Self {
+            client: Client::new(),
+            api_key: Some(token.to_string()),
+            session: None,
+        }
+    }
+
+    pub fn with_account(username: &str, password: &str) -> Self {
+        let credentials = Credentials {
+            username: username.to_string(),
+            password: password.to_string(),
+            solved_captcha: tokio::sync::RwLock::new(None),
+            profile_dir: crate::default_profile_dir(),
+        };
+        let session = Session::new(credentials).unwrap_or_else(|_| Session::new_fallback());
+        Self {
+            client: Client::new(),
+            api_key: None,
+            session: Some(Arc::new(session)),
+        }
+    }
+
+    fn http(&self) -> &Client {
+        self.session
+            .as_ref()
+            .map(|session| session.client())
+            .unwrap_or(&self.client)
+    }
+
+    fn api_base(&self) -> &'static str {
+        if self.api_key.is_some() {
+            API_V1_BASE
+        } else {
+            API_BASE
+        }
+    }
+
+    async fn authorization(&self) -> Result<Option<HeaderValue>, UpioError> {
+        let bearer = if let Some(api_key) = &self.api_key {
+            api_key.clone()
+        } else if let Some(session) = &self.session {
+            session
+                .bearer()
+                .await
+                .map_err(|error| UpioError {
+                    message: error.message,
+                    status_code: error.status_code,
+                })?
+                .to_string()
+        } else {
+            return Ok(None);
+        };
+
+        HeaderValue::from_str(&format!("Bearer {bearer}"))
+            .map(Some)
+            .map_err(|error| UpioError {
+                message: format!("GoonBox returned an unusable bearer: {error}"),
+                status_code: None,
+            })
+    }
+
+    async fn fetch_json(&self, path: &str) -> Result<Value, UpioError> {
+        let primary = format!("{}{path}", self.api_base());
+        match self.fetch_json_url(&primary).await {
+            Err(error) if self.api_key.is_some() && error.status_code == Some(404) => {
+                self.fetch_json_url(&format!("{API_BASE}{path}")).await
+            }
+            result => result,
+        }
+    }
+
+    async fn fetch_json_url(&self, url: &str) -> Result<Value, UpioError> {
+        let auth_first = self.api_key.is_some();
+        match self.fetch_json_url_with(url, auth_first).await {
+            Err(error)
+                if !auth_first
+                    && self.session.is_some()
+                    && matches!(error.status_code, Some(401 | 403 | 404)) =>
+            {
+                self.fetch_json_url_with(url, true).await
+            }
+            result => result,
+        }
+    }
+
+    async fn fetch_json_url_with(&self, url: &str, authorize: bool) -> Result<Value, UpioError> {
         let mut current = url.to_string();
 
         for _ in 0..MAX_REDIRECTS {
-            let response = self
-                .client
+            let mut request = self
+                .http()
                 .get(&current)
-                .headers(crate::login::browser_headers())
-                .send()
-                .await
-                .map_err(map_reqwest_error)?;
+                .headers(crate::login::browser_headers());
+            if authorize {
+                if let Some(auth) = self.authorization().await? {
+                    request = request.header(AUTHORIZATION, auth);
+                }
+            }
+            let response = request.send().await.map_err(map_reqwest_error)?;
             let status = response.status();
             let body = response.text().await.map_err(map_reqwest_error)?;
 
@@ -211,7 +307,7 @@ impl Downloader for GoonboxDownloader {
 
         match target(&parsed) {
             Some(Target::Image(id)) => {
-                let value = self.fetch_json(&format!("{IMAGE_API}/{id}")).await?;
+                let value = self.fetch_json(&format!("/images/{id}")).await?;
                 let response: ImageResponse =
                     serde_json::from_value(value).map_err(|error| UpioError {
                         message: format!("unreadable GoonBox image response: {error}"),
@@ -239,13 +335,13 @@ impl Downloader for GoonboxDownloader {
 
 impl GoonboxDownloader {
     async fn resolve_album(&self, id: &str) -> Result<RemoteNode, UpioError> {
-        let mut url = format!("{ALBUM_API}/{id}");
+        let mut path = format!("/albums/{id}");
         let mut canonical = id.to_string();
         let mut name = None;
         let mut children = Vec::new();
 
         loop {
-            let value = self.fetch_json(&url).await?;
+            let value = self.fetch_json(&path).await?;
             let response: AlbumResponse =
                 serde_json::from_value(value).map_err(|error| UpioError {
                     message: format!("unreadable GoonBox album response: {error}"),
@@ -275,8 +371,8 @@ impl GoonboxDownloader {
             if pagination.current_page >= pagination.last_page {
                 break;
             }
-            url = format!(
-                "{ALBUM_API}/{canonical}/images?page={}",
+            path = format!(
+                "/albums/{canonical}/images?page={}",
                 pagination.current_page + 1
             );
         }
@@ -289,7 +385,7 @@ impl GoonboxDownloader {
     }
 
     async fn resolve_user(&self, username: &str) -> Result<RemoteNode, UpioError> {
-        let value = self.fetch_json(&format!("{USER_API}/{username}")).await?;
+        let value = self.fetch_json(&format!("/users/{username}")).await?;
         let response: UserResponse = serde_json::from_value(value).map_err(|error| UpioError {
             message: format!("unreadable GoonBox profile response: {error}"),
             status_code: None,
@@ -304,9 +400,8 @@ impl GoonboxDownloader {
         let mut children = Vec::new();
 
         loop {
-            let url =
-                format!("{USER_API}/{canonical}/images?page={page}&per_page={USER_PAGE_SIZE}");
-            let value = self.fetch_json(&url).await?;
+            let path = format!("/users/{canonical}/images?page={page}&per_page={USER_PAGE_SIZE}");
+            let value = self.fetch_json(&path).await?;
             let response: ImagesResponse =
                 serde_json::from_value(value).map_err(|error| UpioError {
                     message: format!("unreadable GoonBox profile images: {error}"),
@@ -403,13 +498,36 @@ fn api_error(value: &Value, status_code: u16) -> UpioError {
 
 pub static GOONBOX_DOWNLOAD: DownloadDef = DownloadDef {
     parse: parse_url,
-    credential: upio_core::Credential::None,
+    credential: upio_core::Credential::OptionalToken,
     build,
 };
 
 fn build(
-    _config: &UploaderEndpointConfig,
+    config: &UploaderEndpointConfig,
 ) -> Result<upio_core::BoxedDownloader, upio_core::BuildError> {
+    if let Some(token) = config
+        .token
+        .as_deref()
+        .filter(|token| !token.trim().is_empty())
+    {
+        return Ok(Box::new(GoonboxDownloader::with_token(token)));
+    }
+
+    if let (Some(username), Some(password)) = (
+        config
+            .username
+            .as_deref()
+            .filter(|username| !username.trim().is_empty()),
+        config
+            .password
+            .as_deref()
+            .filter(|password| !password.trim().is_empty()),
+    ) {
+        return Ok(Box::new(GoonboxDownloader::with_account(
+            username, password,
+        )));
+    }
+
     Ok(Box::new(GoonboxDownloader::new()))
 }
 
@@ -430,6 +548,12 @@ mod tests {
         assert_eq!(parse_url("https://goonbox.cr/u/alice").unwrap().id, "alice");
         assert!(parse_url("https://goonbox.cr/api/images/abc123").is_none());
         assert!(parse_url("https://example.com/img/abc123").is_none());
+    }
+
+    #[test]
+    fn an_api_key_switches_to_the_versioned_api() {
+        assert_eq!(GoonboxDownloader::new().api_base(), API_BASE);
+        assert_eq!(GoonboxDownloader::with_token("key").api_base(), API_V1_BASE);
     }
 
     #[test]

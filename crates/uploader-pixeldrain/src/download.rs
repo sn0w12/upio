@@ -3,7 +3,9 @@
 //! Files resolve through the public JSON API and download from the official
 //! range-capable endpoint. Pixeldrain throttles free downloads by IP, so the
 //! bypass proxy pool used by the community userscript is tried first for fresh
-//! transfers. Partial transfers use the official endpoint, which honors ranges.
+//! transfers. A configured API key authenticates the official endpoint, which
+//! reaches private content and lifts free-account limits. Partial transfers use
+//! the official endpoint, which honors ranges.
 
 use std::time::Duration;
 

@@ -171,16 +171,19 @@ folder_id = "…"
 token = "…" # optional; anonymous uploads work without it
 folder_id = "…"
 server = "store4" # optional; auto-selected when unset
+link_password = "…" # optional; unlocks password-protected folders
 
 [fileditch]
 
 [filester]
 token = "…"
 folder_id = "…"
+link_password = "…" # optional; unlocks password-protected folders
 
 [goonbox]
-username = "…" # required; no token exists for this service
-password = "…" # required; masked in output like a token
+token = "…" # optional; read-only API key for link-only downloads
+username = "…" # required for uploads
+password = "…" # required for uploads; masked in output like a token
 folder_id = "…" # an album's encoded_id
 
 [pixeldrain]
@@ -193,6 +196,13 @@ folder_id = "…" # a list's id
 Unknown keys in `disabled_uploaders` or `disabled_downloaders` are inert; only
 exact canonical service names disable anything. The two lists are independent,
 so a service can be enabled for one direction and disabled for the other.
+
+Downloads reuse the same service credentials. A token or account is used when
+present, which reaches private or link-only content and lifts per-account
+limits. Public links still work without credentials. GoFile and Filester
+password-protected folders accept the password as a `?password=` query parameter
+on the share URL, or as `gofile.link_password` / `filester.link_password` in the
+config; the URL takes precedence.
 
 ## Preprocessing
 
@@ -313,11 +323,11 @@ Constructors are synchronous. Network setup happens in `init()`:
 - `FilesterUploader::new()` or `FilesterUploader::with_token(token)`, token optional.
 - `PixeldrainUploader::new()` or `PixeldrainUploader::with_token(token)`,
   token required; Pixeldrain rejects anonymous uploads.
-- `GoonboxUploader::new(username, password)`. No token: GoonBox has no
-  browser-free write API, so `init()` signs in and solves the site's
-  Cloudflare challenge with a real Chrome. On a headless Linux server,
-  install Xvfb (`apt install xvfb`); upio starts it automatically when
-  `DISPLAY` is unset.
+- `GoonboxUploader::new(username, password)`. Uploads use an account, not a
+  token: GoonBox has no browser-free write API, so `init()` signs in and
+  solves the site's Cloudflare challenge with a real Chrome. On a headless
+  Linux server, install Xvfb (`apt install xvfb`); upio starts it
+  automatically when `DISPLAY` is unset.
 
 Uploaders declare what they accept via `capabilities()` (video, image, audio,
 archives, arbitrary files) and their maximum file size via `max_file_size()`;
@@ -368,6 +378,14 @@ A service advertises download support by adding a `DownloadDef` to its
 `ServiceDef`. `UploaderId::from_url` dispatches a URL to the service that claims
 it, and `registry::build_downloader(id, config)` builds the downloader. A
 service without a descriptor is upload-only.
+
+Downloaders accept the same credentials as their uploaders:
+`BunkrDownloader`, `GoFileDownloader`, `FilesterDownloader`, and
+`PixeldrainDownloader` take a token through `with_token` or the config's
+`token`; `GoonboxDownloader` takes either a read-only API key (`with_token`) or
+an account (`with_account`). Fileditch has no accounts, tokens, or link
+passwords. GoFile and Filester read a protected-link password from the URL's
+`?password=` or the config's `link_password`.
 
 Fileditch share pages gate their direct link behind a WebAssembly browser check.
 Its downloader runs a real Chrome to pass that check, reads the link the page

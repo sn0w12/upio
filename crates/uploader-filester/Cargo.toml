@@ -12,6 +12,7 @@ download = ["upio-core/download"]
 [dependencies]
 upio-core = { workspace = true }
 anyhow = { workspace = true }
+base64 = { workspace = true }
 async-trait = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

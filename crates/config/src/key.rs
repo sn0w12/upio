@@ -22,10 +22,13 @@ pub enum ConfigKey {
     GofileToken,
     GofileFolderId,
     GofileServer,
+    GofileLinkPassword,
     FilesterToken,
     FilesterFolderId,
+    FilesterLinkPassword,
     PixeldrainToken,
     PixeldrainFolderId,
+    GoonboxToken,
     GoonboxUsername,
     GoonboxPassword,
     GoonboxFolderId,
@@ -44,10 +47,13 @@ impl ConfigKey {
         Self::GofileToken,
         Self::GofileFolderId,
         Self::GofileServer,
+        Self::GofileLinkPassword,
         Self::FilesterToken,
         Self::FilesterFolderId,
+        Self::FilesterLinkPassword,
         Self::PixeldrainToken,
         Self::PixeldrainFolderId,
+        Self::GoonboxToken,
         Self::GoonboxUsername,
         Self::GoonboxPassword,
         Self::GoonboxFolderId,
@@ -67,10 +73,13 @@ impl ConfigKey {
             Self::GofileToken => "gofile.token",
             Self::GofileFolderId => "gofile.folder_id",
             Self::GofileServer => "gofile.server",
+            Self::GofileLinkPassword => "gofile.link_password",
             Self::FilesterToken => "filester.token",
             Self::FilesterFolderId => "filester.folder_id",
+            Self::FilesterLinkPassword => "filester.link_password",
             Self::PixeldrainToken => "pixeldrain.token",
             Self::PixeldrainFolderId => "pixeldrain.folder_id",
+            Self::GoonboxToken => "goonbox.token",
             Self::GoonboxUsername => "goonbox.username",
             Self::GoonboxPassword => "goonbox.password",
             Self::GoonboxFolderId => "goonbox.folder_id",
@@ -84,8 +93,11 @@ impl ConfigKey {
             self,
             Self::BunkrToken
                 | Self::GofileToken
+                | Self::GofileLinkPassword
                 | Self::FilesterToken
+                | Self::FilesterLinkPassword
                 | Self::PixeldrainToken
+                | Self::GoonboxToken
                 | Self::GoonboxPassword
         )
     }
@@ -110,10 +122,13 @@ impl ConfigKey {
             Self::GofileToken => token_of(&config.gofile),
             Self::GofileFolderId => folder_id_of(&config.gofile),
             Self::GofileServer => server_of(&config.gofile),
+            Self::GofileLinkPassword => text_of(&config.gofile, |c| c.link_password.as_deref()),
             Self::FilesterToken => token_of(&config.filester),
             Self::FilesterFolderId => folder_id_of(&config.filester),
+            Self::FilesterLinkPassword => text_of(&config.filester, |c| c.link_password.as_deref()),
             Self::PixeldrainToken => token_of(&config.pixeldrain),
             Self::PixeldrainFolderId => folder_id_of(&config.pixeldrain),
+            Self::GoonboxToken => token_of(&config.goonbox),
             Self::GoonboxUsername => text_of(&config.goonbox, |c| c.username.as_deref()),
             Self::GoonboxPassword => text_of(&config.goonbox, |c| c.password.as_deref()),
             Self::GoonboxFolderId => folder_id_of(&config.goonbox),
@@ -182,10 +197,13 @@ impl ConfigKey {
             Self::GofileToken => endpoint(&mut config.gofile).token = opt(value),
             Self::GofileFolderId => endpoint(&mut config.gofile).folder_id = opt(value),
             Self::GofileServer => endpoint(&mut config.gofile).server = opt(value),
+            Self::GofileLinkPassword => endpoint(&mut config.gofile).link_password = opt(value),
             Self::FilesterToken => endpoint(&mut config.filester).token = opt(value),
             Self::FilesterFolderId => endpoint(&mut config.filester).folder_id = opt(value),
+            Self::FilesterLinkPassword => endpoint(&mut config.filester).link_password = opt(value),
             Self::PixeldrainToken => endpoint(&mut config.pixeldrain).token = opt(value),
             Self::PixeldrainFolderId => endpoint(&mut config.pixeldrain).folder_id = opt(value),
+            Self::GoonboxToken => endpoint(&mut config.goonbox).token = opt(value),
             Self::GoonboxUsername => endpoint(&mut config.goonbox).username = opt(value),
             Self::GoonboxPassword => endpoint(&mut config.goonbox).password = opt(value),
             Self::GoonboxFolderId => endpoint(&mut config.goonbox).folder_id = opt(value),

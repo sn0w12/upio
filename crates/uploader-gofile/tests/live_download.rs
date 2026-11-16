@@ -1,15 +1,20 @@
 #![cfg(feature = "download")]
 
 use upio_core::download::{Downloader, RemoteNode};
+use upio_core::UploaderEndpointConfig;
 use uploader_gofile::GoFileDownloader;
 
 #[tokio::test]
-#[ignore = "requires a live GoFile share URL in UPIO_GOFILE_URL"]
+#[ignore = "requires a live GoFile share URL in UPIO_GOFILE_URL (and UPIO_GOFILE_PASSWORD for protected folders)"]
 async fn resolves_a_live_share_url() {
     let url = std::env::var("UPIO_GOFILE_URL").expect("set UPIO_GOFILE_URL");
+    let config = UploaderEndpointConfig {
+        link_password: std::env::var("UPIO_GOFILE_PASSWORD").ok(),
+        ..Default::default()
+    };
     let downloader = GoFileDownloader::new();
     let node = downloader
-        .resolve(&url, &Default::default())
+        .resolve(&url, &config)
         .await
         .expect("resolution should succeed");
 
@@ -30,7 +35,7 @@ async fn resolves_a_live_share_url() {
     };
     if let Some(file) = first_file {
         let mut response = downloader
-            .open(file, 0, &Default::default())
+            .open(file, 0, &config)
             .await
             .expect("the direct link should open");
         assert!(response.status().is_success());

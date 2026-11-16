@@ -3,7 +3,9 @@
 //! Bunkr exposes a numeric file id on each share page. The public download API
 //! turns that id into a media path, a separate signer issues a short-lived
 //! token, and the resulting URL is a plain range-capable CDN link. The link is
-//! minted per request so retries after an expiry start clean.
+//! minted per request so retries after an expiry start clean. An optional
+//! account token travels with page and API requests; public links work without
+//! one.
 
 use async_trait::async_trait;
 use reqwest::header::{ACCEPT, ACCEPT_LANGUAGE, CONTENT_TYPE, ORIGIN, RANGE, REFERER, USER_AGENT};
@@ -59,6 +61,7 @@ struct SignResponse {
 
 pub struct BunkrDownloader {
     client: Client,
+    token: Option<String>,
 }
 
 impl BunkrDownloader {
@@ -67,6 +70,14 @@ impl BunkrDownloader {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
+            token: None,
+        }
+    }
+
+    pub fn with_token(token: &str) -> Self {
+        Self {
+            client: Client::new(),
+            token: Some(token.to_string()),
         }
     }
 }
@@ -88,7 +99,7 @@ impl Downloader for BunkrDownloader {
         url: &str,
         _config: &UploaderEndpointConfig,
     ) -> Result<RemoteNode, UpioError> {
-        resolve_page(&self.client, url).await
+        resolve_page(&self.client, self.token.as_deref(), url).await
     }
 
     async fn open(
@@ -101,7 +112,7 @@ impl Downloader for BunkrDownloader {
             message: format!("bunkr file URL carries no numeric file id: {}", file.url),
             status_code: None,
         })?;
-        let direct = signed_url(&self.client, &id).await?;
+        let direct = signed_url(&self.client, self.token.as_deref(), &id).await?;
 
         let mut request = self
             .client
@@ -161,14 +172,18 @@ fn classify(url: &Url) -> Option<ResourceKind> {
     }
 }
 
-async fn resolve_page(client: &Client, url: &str) -> Result<RemoteNode, UpioError> {
+async fn resolve_page(
+    client: &Client,
+    token: Option<&str>,
+    url: &str,
+) -> Result<RemoteNode, UpioError> {
     let parsed = Url::parse(url).map_err(|error| UpioError {
         message: format!("invalid Bunkr URL '{url}': {error}"),
         status_code: None,
     })?;
     match classify(&parsed) {
-        Some(ResourceKind::File) => resolve_file(client, parsed).await,
-        Some(ResourceKind::Collection) => resolve_album(client, parsed).await,
+        Some(ResourceKind::File) => resolve_file(client, token, parsed).await,
+        Some(ResourceKind::Collection) => resolve_album(client, token, parsed).await,
         None => Err(UpioError {
             message: format!("'{url}' is not a Bunkr file or album URL"),
             status_code: None,
@@ -176,8 +191,12 @@ async fn resolve_page(client: &Client, url: &str) -> Result<RemoteNode, UpioErro
     }
 }
 
-async fn resolve_file(client: &Client, url: Url) -> Result<RemoteNode, UpioError> {
-    let (final_url, html) = get_page(client, url).await?;
+async fn resolve_file(
+    client: &Client,
+    token: Option<&str>,
+    url: Url,
+) -> Result<RemoteNode, UpioError> {
+    let (final_url, html) = get_page(client, token, url).await?;
     let id = extract_file_id(&html).ok_or_else(|| UpioError {
         message: "the Bunkr file page did not contain a numeric file id".to_string(),
         status_code: None,
@@ -201,9 +220,13 @@ async fn resolve_file(client: &Client, url: Url) -> Result<RemoteNode, UpioError
     Ok(RemoteNode::File(file))
 }
 
-async fn resolve_album(client: &Client, mut url: Url) -> Result<RemoteNode, UpioError> {
+async fn resolve_album(
+    client: &Client,
+    token: Option<&str>,
+    mut url: Url,
+) -> Result<RemoteNode, UpioError> {
     url.query_pairs_mut().append_pair("advanced", "1");
-    let (final_url, html) = get_page(client, url).await?;
+    let (final_url, html) = get_page(client, token, url).await?;
 
     let array = extract_album_array(&html).ok_or_else(|| UpioError {
         message: "the Bunkr album page did not contain window.albumFiles".to_string(),
@@ -269,18 +292,23 @@ fn origin_of(url: &Url) -> String {
     }
 }
 
-async fn get_page(client: &Client, url: Url) -> Result<(Url, String), UpioError> {
-    let response = client
+async fn get_page(
+    client: &Client,
+    token: Option<&str>,
+    url: Url,
+) -> Result<(Url, String), UpioError> {
+    let mut request = client
         .get(url)
         .header(USER_AGENT, PAGE_USER_AGENT)
         .header(
             ACCEPT,
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         )
-        .header(ACCEPT_LANGUAGE, "en-US,en;q=0.9")
-        .send()
-        .await
-        .map_err(map_reqwest_error)?;
+        .header(ACCEPT_LANGUAGE, "en-US,en;q=0.9");
+    if let Some(token) = token {
+        request = request.header("token", token);
+    }
+    let response = request.send().await.map_err(map_reqwest_error)?;
 
     let status = response.status();
     if !status.is_success() {
@@ -295,14 +323,18 @@ async fn get_page(client: &Client, url: Url) -> Result<(Url, String), UpioError>
     Ok((final_url, html))
 }
 
-async fn signed_url(client: &Client, id: &str) -> Result<Url, UpioError> {
-    let meta: DownloadResponse = client
+async fn signed_url(client: &Client, token: Option<&str>, id: &str) -> Result<Url, UpioError> {
+    let mut request = client
         .post(API_URL)
         .header(USER_AGENT, PAGE_USER_AGENT)
         .header(ACCEPT, "application/json, text/plain, */*")
         .header(ACCEPT_LANGUAGE, "en-US,en;q=0.9")
         .header(CONTENT_TYPE, "application/json")
-        .header(ORIGIN, API_ORIGIN)
+        .header(ORIGIN, API_ORIGIN);
+    if let Some(token) = token {
+        request = request.header("token", token);
+    }
+    let meta: DownloadResponse = request
         .json(&serde_json::json!({ "id": id }))
         .send()
         .await
@@ -438,14 +470,17 @@ fn decode_entities(value: &str) -> String {
 
 pub static BUNKR_DOWNLOAD: DownloadDef = DownloadDef {
     parse: parse_url,
-    credential: upio_core::Credential::None,
+    credential: upio_core::Credential::OptionalToken,
     build,
 };
 
 fn build(
-    _config: &UploaderEndpointConfig,
+    config: &UploaderEndpointConfig,
 ) -> Result<upio_core::BoxedDownloader, upio_core::BuildError> {
-    Ok(Box::new(BunkrDownloader::new()))
+    Ok(Box::new(match config.token.as_deref() {
+        Some(token) if !token.trim().is_empty() => BunkrDownloader::with_token(token),
+        _ => BunkrDownloader::new(),
+    }))
 }
 
 #[cfg(test)]

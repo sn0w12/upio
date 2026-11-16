@@ -92,6 +92,36 @@ fn get_and_set_values() {
 }
 
 #[test]
+fn download_credentials_are_typed_secrets() {
+    let mut config = Config::default();
+
+    config
+        .set_value(&ConfigKey::GofileLinkPassword, "a b")
+        .unwrap();
+    assert_eq!(
+        config.gofile.as_ref().unwrap().link_password.as_deref(),
+        Some("a b")
+    );
+    assert!(ConfigKey::GofileLinkPassword.is_secret());
+
+    config
+        .set_value(&ConfigKey::FilesterLinkPassword, "folder password")
+        .unwrap();
+    assert_eq!(
+        config.filester.as_ref().unwrap().link_password.as_deref(),
+        Some("folder password")
+    );
+    assert!(ConfigKey::FilesterLinkPassword.is_secret());
+
+    config.set_value(&ConfigKey::GoonboxToken, "key").unwrap();
+    assert_eq!(
+        config.goonbox.as_ref().unwrap().token.as_deref(),
+        Some("key")
+    );
+    assert!(ConfigKey::GoonboxToken.is_secret());
+}
+
+#[test]
 fn get_uploader_config_respects_preprocess() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.toml");

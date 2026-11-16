@@ -3,7 +3,8 @@
 //! GoFile's API needs a guest account token and a short-lived website token.
 //! The website token is recomputed from the account token, a 4-hour window,
 //! and a salt embedded in GoFile's client script. Direct store links also need
-//! the account token as a cookie.
+//! the account token as a cookie. A configured account token replaces the guest
+//! one, and password-protected folders take the SHA-256 of the link password.
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -324,7 +325,13 @@ impl GoFileDownloader {
                     .is_some_and(|status| status != "passwordOk")
                 {
                     return Err(UpioError {
-                        message: "GoFile content is password protected".to_string(),
+                        message: if password.is_none() {
+                            "GoFile content is password protected; add ?password= to the URL or \
+                             set gofile.link_password"
+                                .to_string()
+                        } else {
+                            "GoFile rejected the folder password".to_string()
+                        },
                         status_code: None,
                     });
                 }
@@ -372,7 +379,7 @@ impl Downloader for GoFileDownloader {
     async fn resolve(
         &self,
         url: &str,
-        _config: &UploaderEndpointConfig,
+        config: &UploaderEndpointConfig,
     ) -> Result<RemoteNode, UpioError> {
         let parsed = Url::parse(url).map_err(|error| UpioError {
             message: format!("invalid GoFile URL '{url}': {error}"),
@@ -382,7 +389,7 @@ impl Downloader for GoFileDownloader {
             message: format!("'{url}' is not a GoFile share URL"),
             status_code: None,
         })?;
-        let password = password_hash(&parsed);
+        let password = link_password_hash(&parsed, config);
         let token = self.token().await?;
         let node = self.fetch_node(&token, id, password.as_deref(), 0).await?;
         Ok(flatten_single_file(node))
@@ -453,6 +460,16 @@ fn password_hash(url: &Url) -> Option<String> {
         .find(|(name, _)| name == "password")
         .filter(|(_, value)| !value.is_empty())
         .map(|(_, value)| hex_sha256(value.as_bytes()))
+}
+
+fn link_password_hash(url: &Url, config: &UploaderEndpointConfig) -> Option<String> {
+    password_hash(url).or_else(|| {
+        config
+            .link_password
+            .as_deref()
+            .filter(|password| !password.is_empty())
+            .map(|password| hex_sha256(password.as_bytes()))
+    })
 }
 
 fn file_from_child(child: ContentChild, id: &str) -> Option<RemoteFile> {
@@ -927,6 +944,25 @@ mod tests {
         assert_eq!(
             password_hash(&url).as_deref(),
             Some("2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b")
+        );
+    }
+
+    #[test]
+    fn a_configured_password_is_used_when_the_url_has_none() {
+        let config = UploaderEndpointConfig {
+            link_password: Some("secret".to_string()),
+            ..Default::default()
+        };
+        let url = Url::parse("https://gofile.io/d/abc123").unwrap();
+        assert_eq!(
+            link_password_hash(&url, &config).as_deref(),
+            Some("2bb80d537b1da3e38bd30361aa855686bde0eacd7162fef6a25fe97bf527a25b")
+        );
+
+        let with_url = Url::parse("https://gofile.io/d/abc123?password=other").unwrap();
+        assert_ne!(
+            link_password_hash(&with_url, &config),
+            link_password_hash(&url, &config)
         );
     }
 

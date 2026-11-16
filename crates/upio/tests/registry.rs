@@ -102,6 +102,17 @@ fn filester_share_urls_are_registered() {
 
     let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
     assert_eq!(downloader.name(), "filester");
+
+    let folder = UploaderId::from_url("https://filester.me/f/folder1").unwrap();
+    assert_eq!(folder.name(), "filester");
+
+    let config = UploaderEndpointConfig {
+        token: Some("key".to_string()),
+        link_password: Some("password".to_string()),
+        ..Default::default()
+    };
+    let downloader = build_downloader(folder, &config).unwrap();
+    assert_eq!(downloader.name(), "filester");
 }
 
 #[test]
