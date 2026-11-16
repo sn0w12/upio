@@ -8,6 +8,36 @@ fn main() {
     if let Err(e) = generate_icons() {
         panic!("icon generation failed: {e}");
     }
+    windows_resource();
+}
+
+fn windows_resource() {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        return;
+    }
+    println!("cargo:rerun-if-changed=assets/app-icons/icon.ico");
+
+    let version = env::var("CARGO_PKG_VERSION").unwrap_or_default();
+    let mut parts = version
+        .split('.')
+        .map(|part| part.parse::<u64>().unwrap_or(0));
+    let major = parts.next().unwrap_or(0);
+    let minor = parts.next().unwrap_or(0);
+    let patch = parts.next().unwrap_or(0);
+    let packed = (major << 48) | (minor << 32) | (patch << 16);
+
+    let mut resource = winresource::WindowsResource::new();
+    resource
+        .set_icon("assets/app-icons/icon.ico")
+        .set("ProductName", "upio")
+        .set("FileDescription", "upio")
+        .set("InternalName", "upio.exe")
+        .set("OriginalFilename", "upio.exe")
+        .set_version_info(winresource::VersionInfo::FILEVERSION, packed)
+        .set_version_info(winresource::VersionInfo::PRODUCTVERSION, packed);
+    resource
+        .compile()
+        .expect("embed Windows icon and version info");
 }
 
 fn generate_icons() -> Result<(), Box<dyn std::error::Error>> {

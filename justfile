@@ -5,6 +5,8 @@ set shell := ['sh', '-cu']
 set positional-arguments
 set default-list
 
+alias bundle := package
+
 # Install developer tools (run once after cloning)
 [group('setup')]
 setup:
@@ -96,6 +98,16 @@ gui:
 [group('gui')]
 gui-release:
     cargo build --release -p upio-gui
+
+# Build the installer or app bundle for the host platform (needs cargo-packager)
+[group('gui')]
+package:
+    cargo packager --release -p upio-gui
+
+# Regenerate the app icon set from the brand logo
+[group('gui')]
+icons:
+    npx --yes @tauri-apps/cli@latest icon crates/gui/assets/brand/logo.png -o crates/gui/assets/app-icons
 
 # Regenerate the generated documentation tables
 [group('docs')]

@@ -5,6 +5,38 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "upio"
+path = "src/main.rs"
+
+[build-dependencies]
+winresource = "0.1"
+
+[package.metadata.packager]
+before-packaging-command = "cargo build --release -p upio-gui"
+product-name = "upio"
+identifier = "com.upio.app"
+publisher = "upio"
+category = "Utility"
+out-dir = "../../dist"
+icons = [
+    "assets/app-icons/32x32.png",
+    "assets/app-icons/64x64.png",
+    "assets/app-icons/128x128.png",
+    "assets/app-icons/128x128@2x.png",
+    "assets/app-icons/icon.icns",
+    "assets/app-icons/icon.ico",
+]
+
+[package.metadata.packager.deb]
+package-name = "upio"
+section = "utils"
+
+[package.metadata.packager.nsis]
+installer-icon = "assets/app-icons/icon.ico"
+installMode = "currentUser"
+appdata-paths = ["$APPDATA/upio"]
+
 [dependencies]
 upio = { workspace = true }
 upio-config = { workspace = true }
