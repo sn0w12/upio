@@ -14,7 +14,9 @@ pub use download::{
     BoxedDownloader, ConflictPolicy, Downloader, ParsedUrl, RemoteFile, RemoteNode, ResourceKind,
 };
 #[cfg(feature = "download")]
-pub use download::{DownloadOptions, DownloadPlan, DownloadProgress, DownloadResult, PlannedFile};
+pub use download::{
+    DownloadObserver, DownloadOptions, DownloadPlan, DownloadProgress, DownloadResult, PlannedFile,
+};
 pub use error::{UpioError, UploadError};
 pub use preprocess::{
     PreprocessConfig, PreprocessError, PreprocessRule, PreprocessStrategy, RuleTrigger,

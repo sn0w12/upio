@@ -118,3 +118,39 @@ fn unknown_command_fails() {
     let mut cmd = Command::cargo_bin("upio-cli").unwrap();
     cmd.arg("bogus").assert().failure();
 }
+
+#[cfg(debug_assertions)]
+#[test]
+fn demo_upload_runs() {
+    let output = Command::cargo_bin("upio-cli")
+        .unwrap()
+        .args(["demo", "upload", "--files", "1"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("upio upload"));
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn demo_download_runs() {
+    let output = Command::cargo_bin("upio-cli")
+        .unwrap()
+        .args(["demo", "download", "--files", "2"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("upio download"));
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn demo_mirror_runs() {
+    let output = Command::cargo_bin("upio-cli")
+        .unwrap()
+        .args(["demo", "mirror", "--files", "2"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("upio mirror"));
+}

@@ -10,10 +10,15 @@ upio = { workspace = true, features = ["download"] }
 upio-config = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
-tiny-table = { workspace = true }
+futures = { workspace = true }
 tempfile = { workspace = true }
+terminal_size = { workspace = true }
 tokio = { workspace = true }
+unicode-width = { workspace = true }
 walkdir = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }

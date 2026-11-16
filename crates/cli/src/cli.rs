@@ -161,6 +161,35 @@ pub enum Commands {
         #[command(subcommand)]
         action: PreprocessAction,
     },
+    /// Play simulated transfers without touching the network (debug builds)
+    #[cfg(debug_assertions)]
+    Demo {
+        #[command(subcommand)]
+        action: DemoAction,
+    },
+}
+
+#[cfg(debug_assertions)]
+#[derive(Debug, Subcommand)]
+pub enum DemoAction {
+    /// Play a simulated upload
+    Upload {
+        /// How many files to show
+        #[arg(long, default_value_t = 5)]
+        files: usize,
+    },
+    /// Play a simulated download
+    Download {
+        /// How many files to show
+        #[arg(long, default_value_t = 5)]
+        files: usize,
+    },
+    /// Play a simulated mirror: download a share, then upload its files
+    Mirror {
+        /// How many files to show
+        #[arg(long, default_value_t = 4)]
+        files: usize,
+    },
 }
 
 #[derive(Debug, Subcommand)]

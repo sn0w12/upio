@@ -1,7 +1,9 @@
 mod cli;
 mod commands;
 mod input;
+mod live;
 mod output;
+mod style;
 mod upload;
 
 use clap::{CommandFactory, Parser};
@@ -10,6 +12,7 @@ use cli::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    style::init();
     let cli = Cli::parse();
     let config_path = cli.config.as_deref();
 
@@ -24,6 +27,8 @@ async fn main() -> anyhow::Result<()> {
         }) => {
             commands::preprocess::run(config_path)?;
         }
+        #[cfg(debug_assertions)]
+        Some(Commands::Demo { action }) => commands::demo::run(action).await?,
         None => {
             if cli.upload.paths.is_empty() {
                 Cli::command().print_help()?;

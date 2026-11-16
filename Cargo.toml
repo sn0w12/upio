@@ -48,10 +48,11 @@ reqwest = { version = "0.12", default-features = false, features = ["cookies", "
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
-tiny-table = "0.2"
-tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread"] }
+terminal_size = "0.4"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread", "time"] }
 tokio-util = { version = "0.7", features = ["io"] }
 toml = "0.8"
+unicode-width = "0.2"
 uuid = { version = "1", features = ["v4"] }
 walkdir = "2"
 
@@ -63,6 +64,7 @@ rune-kit = { git = "https://github.com/anomalyco/rune", rev = "631e8a67cb3c40225
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Dwm",
+    "Win32_System_Console",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

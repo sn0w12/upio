@@ -5,7 +5,8 @@ use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
 use upio_core::download::{
-    self, ConflictPolicy, DirectDownloader, DownloadOptions, Downloader, RemoteFile,
+    self, ConflictPolicy, DirectDownloader, DownloadObserver, DownloadOptions, Downloader,
+    RemoteFile,
 };
 
 struct TestServer {
@@ -221,4 +222,53 @@ async fn downloader_resolved(server: &TestServer) -> upio_core::download::Remote
         .resolve(&server.url("file"), &Default::default())
         .await
         .unwrap()
+}
+
+#[tokio::test]
+async fn observer_sees_each_file_start_and_finish() {
+    let server = TestServer::start(payload(), false);
+    let dir = tempfile::tempdir().unwrap();
+    let node = downloader_resolved(&server).await;
+    let plan = download::plan(
+        &node,
+        &DownloadOptions {
+            output_dir: dir.path().to_path_buf(),
+            ..DownloadOptions::default()
+        },
+    )
+    .unwrap();
+
+    let started = Arc::new(Mutex::new(Vec::new()));
+    let finished = Arc::new(Mutex::new(Vec::new()));
+    let observer = DownloadObserver::new(
+        {
+            let started = Arc::clone(&started);
+            move |file| started.lock().unwrap().push(file.destination.clone())
+        },
+        {
+            let finished = Arc::clone(&finished);
+            move |result| {
+                finished
+                    .lock()
+                    .unwrap()
+                    .push((result.destination.clone(), result.error.clone()))
+            }
+        },
+    );
+
+    let results = download::download_observed(
+        &plan,
+        &DirectDownloader::new(),
+        &Default::default(),
+        1,
+        None,
+        Some(observer),
+    )
+    .await;
+
+    assert!(results[0].error.is_none(), "{:?}", results[0].error);
+    assert_eq!(started.lock().unwrap().len(), 1);
+    let finished = finished.lock().unwrap();
+    assert_eq!(finished.len(), 1);
+    assert!(finished[0].1.is_none());
 }

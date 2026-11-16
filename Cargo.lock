@@ -4675,15 +4675,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tiny-table"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b25d77c0ef23108f246f7733e292e173db3c996bee63a619a589e80129410de"
-dependencies = [
- "terminal_size",
-]
-
-[[package]]
 name = "tinystr"
 version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5065,12 +5056,15 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
+ "futures",
  "tempfile",
- "tiny-table",
+ "terminal_size",
  "tokio",
+ "unicode-width",
  "upio",
  "upio-config",
  "walkdir",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

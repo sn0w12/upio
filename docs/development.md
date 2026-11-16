@@ -33,6 +33,20 @@ cargo fmt --all -- --check
 
 CI runs the same checks plus `cargo check -p upio --no-default-features`.
 
+## Previewing the CLI
+
+Debug builds include a `demo` subcommand that plays the upload and download
+reports without touching the network or the filesystem:
+
+```sh
+cargo run -p upio-cli -- demo upload
+cargo run -p upio-cli -- demo download
+cargo run -p upio-cli -- demo mirror
+cargo run -p upio-cli -- demo download --files 8
+```
+
+The subcommand is compiled out of release builds.
+
 ## Generated documentation
 
 The services table in the README and the strategies table in

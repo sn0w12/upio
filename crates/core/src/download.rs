@@ -146,7 +146,6 @@ pub struct DownloadProgress {
 
 #[cfg(feature = "download")]
 type ProgressCallback = dyn Fn(&Path, u64, u64) + Send + Sync;
-
 #[cfg(feature = "download")]
 impl DownloadProgress {
     pub fn new(f: impl Fn(&Path, u64, u64) + Send + Sync + 'static) -> Self {
@@ -157,6 +156,35 @@ impl DownloadProgress {
 
     pub fn emit(&self, destination: &Path, transferred: u64, total: u64) {
         (self.inner)(destination, transferred, total);
+    }
+}
+
+/// Per-file lifecycle hooks for callers that render transfers as they happen.
+#[cfg(feature = "download")]
+#[derive(Clone)]
+pub struct DownloadObserver {
+    started: std::sync::Arc<dyn Fn(&PlannedFile) + Send + Sync>,
+    finished: std::sync::Arc<dyn Fn(&DownloadResult) + Send + Sync>,
+}
+
+#[cfg(feature = "download")]
+impl DownloadObserver {
+    pub fn new(
+        started: impl Fn(&PlannedFile) + Send + Sync + 'static,
+        finished: impl Fn(&DownloadResult) + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            started: std::sync::Arc::new(started),
+            finished: std::sync::Arc::new(finished),
+        }
+    }
+
+    fn start(&self, file: &PlannedFile) {
+        (self.started)(file);
+    }
+
+    fn finish(&self, result: &DownloadResult) {
+        (self.finished)(result);
     }
 }
 
@@ -326,11 +354,25 @@ pub async fn download(
     concurrency: usize,
     progress: Option<DownloadProgress>,
 ) -> Vec<DownloadResult> {
+    download_observed(plan, downloader, config, concurrency, progress, None).await
+}
+
+/// Like [`download`], with hooks that fire as each file starts and finishes.
+#[cfg(feature = "download")]
+pub async fn download_observed(
+    plan: &DownloadPlan,
+    downloader: &dyn Downloader,
+    config: &UploaderEndpointConfig,
+    concurrency: usize,
+    progress: Option<DownloadProgress>,
+    observer: Option<DownloadObserver>,
+) -> Vec<DownloadResult> {
     futures::stream::iter(plan.files.iter().cloned())
         .map(|file| {
             let progress = progress.clone();
+            let observer = observer.clone();
             let resume = plan.resume;
-            async move { download_one(&file, downloader, config, resume, progress).await }
+            async move { download_one(&file, downloader, config, resume, progress, observer).await }
         })
         .buffered(concurrency.max(1))
         .collect()
@@ -498,6 +540,7 @@ async fn download_one(
     config: &UploaderEndpointConfig,
     resume: bool,
     progress: Option<DownloadProgress>,
+    observer: Option<DownloadObserver>,
 ) -> DownloadResult {
     let source_url = file.source.url.clone();
     let destination = file.destination.clone();
@@ -506,16 +549,24 @@ async fn download_one(
         let bytes = std::fs::metadata(&destination)
             .map(|metadata| metadata.len())
             .unwrap_or(0);
-        return DownloadResult {
+        let result = DownloadResult {
             source_url,
             destination,
             bytes,
             skipped: true,
             error: None,
         };
+        if let Some(observer) = &observer {
+            observer.finish(&result);
+        }
+        return result;
     }
 
-    match download_file(
+    if let Some(observer) = &observer {
+        observer.start(file);
+    }
+
+    let result = match download_file(
         &file.source,
         &destination,
         downloader,
@@ -539,7 +590,12 @@ async fn download_one(
             skipped: false,
             error: Some(error.to_string()),
         },
+    };
+
+    if let Some(observer) = &observer {
+        observer.finish(&result);
     }
+    result
 }
 
 #[cfg(feature = "download")]

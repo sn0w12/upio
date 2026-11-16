@@ -8,8 +8,8 @@ use upio::registry::UploaderId;
 use upio_config::{is_downloader_enabled, Settings};
 
 use crate::cli::{MirrorArgs, UploadArgs};
-use crate::commands::download::{build_service, download_service};
-use crate::output::{self, DownloadOutcome};
+use crate::commands::download::{build_service, download_service, short_label};
+use crate::output::{self, Outcome};
 use crate::upload::upload_to_uploaders;
 
 /// Run the `mirror` command: download one share, then upload its files.
@@ -43,7 +43,7 @@ pub async fn run(args: MirrorArgs, config_path: Option<&Path>) -> Result<()> {
     };
 
     let downloaded = download_service(
-        id.def().display_name.to_string(),
+        short_label(id.def().display_name, &args.url),
         &args.url,
         &service,
         &options,
@@ -51,13 +51,12 @@ pub async fn run(args: MirrorArgs, config_path: Option<&Path>) -> Result<()> {
         false,
     )
     .await;
-    output::print_download(std::slice::from_ref(&downloaded.batch));
 
     let download_failed = downloaded
         .batch
-        .rows
+        .items
         .iter()
-        .filter(|row| row.outcome == DownloadOutcome::Failed)
+        .filter(|item| matches!(item.outcome, Outcome::Failed | Outcome::Notice))
         .count();
     let files = downloaded
         .files
@@ -65,6 +64,7 @@ pub async fn run(args: MirrorArgs, config_path: Option<&Path>) -> Result<()> {
         .map(|path| path.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
     if files.is_empty() {
+        output::print_mirror(&downloaded.batch, &[]);
         bail!("no files were downloaded");
     }
 
@@ -77,14 +77,19 @@ pub async fn run(args: MirrorArgs, config_path: Option<&Path>) -> Result<()> {
         batch_size: args.batch_size,
     };
 
-    println!();
-    let upload_results = upload_to_uploaders(&files, &config, &upload_args).await?;
-    output::print_upload(&upload_results);
+    let upload_results = match upload_to_uploaders(&files, &config, &upload_args).await {
+        Ok(results) => results,
+        Err(error) => {
+            output::print_mirror(&downloaded.batch, &[]);
+            return Err(error);
+        }
+    };
+    output::print_mirror(&downloaded.batch, &upload_results);
 
     let upload_failed = upload_results
         .iter()
-        .flat_map(|result| &result.rows)
-        .filter(|row| row.status != "ok")
+        .flat_map(|result| &result.items)
+        .filter(|item| matches!(item.outcome, Outcome::Failed | Outcome::Notice))
         .count();
     let failed = download_failed + upload_failed;
     if failed > 0 {
