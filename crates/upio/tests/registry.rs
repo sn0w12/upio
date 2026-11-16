@@ -37,6 +37,20 @@ fn fileditch_share_urls_are_registered() {
     assert_eq!(downloader.name(), "fileditch");
 }
 
+#[cfg(feature = "download")]
+#[test]
+fn bunkr_share_urls_are_registered() {
+    let id = UploaderId::from_url("https://bunkr.example/f/abc123xy").unwrap();
+    assert_eq!(id.name(), "bunkr");
+    assert!(id.supports_download());
+
+    let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
+    assert_eq!(downloader.name(), "bunkr");
+
+    let album = UploaderId::from_url("https://bunkr.example/a/album42").unwrap();
+    assert_eq!(album.name(), "bunkr");
+}
+
 #[test]
 fn download_support_is_explicit_per_service() {
     for id in UploaderId::ALL {

@@ -13,7 +13,7 @@ fileditch = ["dep:uploader-fileditch"]
 filester = ["dep:uploader-filester"]
 goonbox = ["dep:uploader-goonbox"]
 pixeldrain = ["dep:uploader-pixeldrain"]
-download = ["fileditch", "upio-core/download", "uploader-fileditch/download"]
+download = ["bunkr", "fileditch", "upio-core/download", "uploader-bunkr/download", "uploader-fileditch/download"]
 
 [dependencies]
 upio-core = { workspace = true }

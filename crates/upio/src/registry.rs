@@ -156,9 +156,9 @@ pub fn build_uploader(
 /// use upio::registry::{build_downloader, BuildError, UploaderId};
 /// use upio::UploaderEndpointConfig;
 ///
-/// let id = UploaderId::from_name("bunkr").unwrap();
+/// let id = UploaderId::from_name("pixeldrain").unwrap();
 /// let err = match build_downloader(id, &UploaderEndpointConfig::default()) {
-///     Ok(_) => panic!("bunkr built a downloader without support"),
+///     Ok(_) => panic!("pixeldrain built a downloader without support"),
 ///     Err(error) => error,
 /// };
 /// assert!(matches!(err, BuildError::Unsupported(_)));

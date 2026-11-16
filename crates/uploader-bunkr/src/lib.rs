@@ -13,11 +13,17 @@ use upio_core::http::UploadProgress;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::file_name_from_path;
-use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::service::{BuildError, Credential, DownloadDef, ServiceDef};
 use upio_core::types::{
     BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
 };
 use uuid::Uuid;
+
+#[cfg(feature = "download")]
+mod download;
+
+#[cfg(feature = "download")]
+pub use download::BunkrDownloader;
 
 const VERIFY_URL: &str = "https://dash.bunkr.cr/api/tokens/verify";
 const CONFIG_URL: &str = "https://dash.bunkr.cr/api/check";
@@ -750,6 +756,11 @@ impl Uploader for BunkrUploader {
     }
 }
 
+#[cfg(feature = "download")]
+const DOWNLOAD: Option<DownloadDef> = Some(download::BUNKR_DOWNLOAD);
+#[cfg(not(feature = "download"))]
+const DOWNLOAD: Option<DownloadDef> = None;
+
 pub static BUNKR_SERVICE: ServiceDef = ServiceDef {
     name: BunkrUploader::NAME,
     display_name: "Bunkr.cr",
@@ -759,7 +770,7 @@ pub static BUNKR_SERVICE: ServiceDef = ServiceDef {
     capabilities: BunkrUploader::CAPABILITIES,
     max_file_size: BunkrUploader::MAX_FILE_SIZE,
     build,
-    download: None,
+    download: DOWNLOAD,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

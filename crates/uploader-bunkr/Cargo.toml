@@ -5,10 +5,15 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+download = ["dep:json5", "upio-core/download"]
+
 [dependencies]
 upio-core = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+json5 = { workspace = true, optional = true }
 mime_guess = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
