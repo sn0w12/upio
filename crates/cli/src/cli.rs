@@ -88,6 +88,50 @@ pub struct DownloadArgs {
     pub dry_run: bool,
 }
 
+/// Arguments for the `mirror` subcommand.
+#[derive(Debug, Parser)]
+#[command(about = "Download a share and upload it to other services")]
+pub struct MirrorArgs {
+    /// Share URL to download
+    pub url: String,
+
+    /// Destination uploader(s). Repeatable: -u bunkr -u gofile
+    #[arg(short = 'u', long, required = true)]
+    pub uploaders: Vec<String>,
+
+    /// Destination folder/album ID
+    #[arg(short = 'f', long)]
+    pub folder_id: Option<String>,
+
+    /// Destination folder/album name (looked up or created)
+    #[arg(short = 'n', long)]
+    pub folder_name: Option<String>,
+
+    /// Maximum concurrent uploads
+    #[arg(short = 'b', long)]
+    pub batch_size: Option<usize>,
+
+    /// Maximum concurrent downloads (defaults to global.download.concurrency)
+    #[arg(short = 'c', long)]
+    pub concurrency: Option<usize>,
+
+    /// Do not resume partial downloads
+    #[arg(long)]
+    pub no_resume: bool,
+
+    /// Password for a protected source link without ?password=
+    #[arg(short = 'p', long)]
+    pub password: Option<String>,
+
+    /// Reuse this download directory instead of a temporary one
+    #[arg(long)]
+    pub staging: Option<PathBuf>,
+
+    /// Keep the temporary download directory after the upload
+    #[arg(long)]
+    pub keep: bool,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Upload files
@@ -99,6 +143,11 @@ pub enum Commands {
     Download {
         #[command(flatten)]
         args: DownloadArgs,
+    },
+    /// Download a share and upload it to other services
+    Mirror {
+        #[command(flatten)]
+        args: MirrorArgs,
     },
     /// Manage configuration
     Config {

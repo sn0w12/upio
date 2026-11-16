@@ -53,6 +53,49 @@ fn download_zero_concurrency_fails() {
 }
 
 #[test]
+fn mirror_help() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args(["mirror", "--help"]).assert().success();
+}
+
+#[test]
+fn mirror_without_url_fails() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args(["mirror", "-u", "bunkr"]).assert().failure();
+}
+
+#[test]
+fn mirror_without_uploaders_fails() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args(["mirror", "https://example.test/file"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn mirror_unknown_url_fails() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args(["mirror", "https://example.test/file", "-u", "bunkr"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn mirror_zero_concurrency_fails() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args([
+        "mirror",
+        "https://example.test/file",
+        "-u",
+        "bunkr",
+        "-c",
+        "0",
+    ])
+    .assert()
+    .failure();
+}
+
+#[test]
 fn list_runs() {
     let mut cmd = Command::cargo_bin("upio-cli").unwrap();
     cmd.arg("list").assert().success();

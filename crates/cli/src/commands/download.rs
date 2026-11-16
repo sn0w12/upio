@@ -6,14 +6,35 @@ use anyhow::{bail, Result};
 use upio::download::{self, BoxedDownloader, ConflictPolicy, DownloadOptions};
 use upio::registry::{self, UploaderId};
 use upio::UploaderEndpointConfig;
-use upio_config::{is_downloader_enabled, Settings};
+use upio_config::{is_downloader_enabled, Config, Settings};
 
 use crate::cli::DownloadArgs;
 use crate::output::{self, DownloadBatch, DownloadOutcome, DownloadRow};
 
-struct ServiceDownloader {
+pub(crate) struct ServiceDownloader {
     downloader: BoxedDownloader,
     endpoint: UploaderEndpointConfig,
+}
+
+pub(crate) struct Downloaded {
+    pub(crate) batch: DownloadBatch,
+    pub(crate) files: Vec<PathBuf>,
+}
+
+pub(crate) fn build_service(
+    id: UploaderId,
+    config: &Config,
+    password: Option<&str>,
+) -> Result<ServiceDownloader, upio::BuildError> {
+    let mut endpoint = config.get_uploader_config(id.name());
+    if let Some(password) = password {
+        endpoint.link_password = Some(password.to_string());
+    }
+    let downloader = registry::build_downloader(id, &endpoint)?;
+    Ok(ServiceDownloader {
+        downloader,
+        endpoint,
+    })
 }
 
 /// Run the `download` command: resolve each URL, plan its files, and transfer.
@@ -69,19 +90,9 @@ pub async fn run(args: DownloadArgs, config_path: Option<&Path>) -> Result<()> {
         }
 
         if !services.contains_key(id.name()) {
-            let mut endpoint = config.get_uploader_config(id.name());
-            if let Some(password) = &args.password {
-                endpoint.link_password = Some(password.clone());
-            }
-            match registry::build_downloader(id, &endpoint) {
-                Ok(downloader) => {
-                    services.insert(
-                        id.name(),
-                        ServiceDownloader {
-                            downloader,
-                            endpoint,
-                        },
-                    );
+            match build_service(id, &config, args.password.as_deref()) {
+                Ok(service) => {
+                    services.insert(id.name(), service);
                 }
                 Err(error) => {
                     batches.push(failed(label, error.to_string()));
@@ -93,7 +104,11 @@ pub async fn run(args: DownloadArgs, config_path: Option<&Path>) -> Result<()> {
         let service = services
             .get(id.name())
             .expect("the service was built above");
-        batches.push(download_url(label, url, service, &options, concurrency, args.dry_run).await);
+        batches.push(
+            download_service(label, url, service, &options, concurrency, args.dry_run)
+                .await
+                .batch,
+        );
     }
 
     output::print_download(&batches);
@@ -109,35 +124,36 @@ pub async fn run(args: DownloadArgs, config_path: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-async fn download_url(
+pub(crate) async fn download_service(
     label: String,
     url: &str,
     service: &ServiceDownloader,
     options: &DownloadOptions,
     concurrency: usize,
     dry_run: bool,
-) -> DownloadBatch {
+) -> Downloaded {
     let node = match service.downloader.resolve(url, &service.endpoint).await {
         Ok(node) => node,
-        Err(error) => return failed(label, error.to_string()),
+        Err(error) => return Downloaded::failed(label, error.to_string()),
     };
 
     let plan = match download::plan(&node, options) {
         Ok(plan) => plan,
-        Err(error) => return failed(label, error.to_string()),
+        Err(error) => return Downloaded::failed(label, error.to_string()),
     };
     if plan.is_empty() {
-        return failed(label, "no files");
+        return Downloaded::failed(label, "no files");
     }
 
     if dry_run {
-        return DownloadBatch {
-            label,
-            rows: plan
-                .files
-                .iter()
-                .map(|file| DownloadRow::planned(&file.destination))
-                .collect(),
+        let rows = plan
+            .files
+            .iter()
+            .map(|file| DownloadRow::planned(&file.destination))
+            .collect();
+        return Downloaded {
+            batch: DownloadBatch { label, rows },
+            files: Vec::new(),
         };
     }
 
@@ -149,9 +165,27 @@ async fn download_url(
         None,
     )
     .await;
-    DownloadBatch {
-        label,
-        rows: results.into_iter().map(DownloadRow::from_result).collect(),
+    let mut files = Vec::with_capacity(results.len());
+    let mut rows = Vec::with_capacity(results.len());
+    for result in results {
+        if result.error.is_none() {
+            files.push(result.destination.clone());
+        }
+        rows.push(DownloadRow::from_result(result));
+    }
+
+    Downloaded {
+        batch: DownloadBatch { label, rows },
+        files,
+    }
+}
+
+impl Downloaded {
+    fn failed(label: String, status: impl Into<String>) -> Self {
+        Self {
+            batch: failed(label, status),
+            files: Vec::new(),
+        }
     }
 }
 

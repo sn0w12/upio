@@ -49,7 +49,7 @@ upio upload -u bunkr video.mp4
 
 ## Command line
 
-The CLI has five subcommands. Running `upio <file>...` with no subcommand
+The CLI has six subcommands. Running `upio <file>...` with no subcommand
 also uploads.
 
 ### `upload`
@@ -123,6 +123,19 @@ upio download --dry-run 'https://gofile.io/d/<id>'
 
 `-p` and `<service>.link_password` supply protected-link passwords; a
 `?password=` on the URL wins.
+
+### `mirror`
+
+Download a share, then upload the files to one or more services:
+
+```sh
+upio mirror 'https://filester.me/f/<id>' -u bunkr -u gofile
+```
+
+`-n`/`-f` choose a destination folder or album, `-b` sets upload concurrency,
+`-c` sets download concurrency, and `-p` unlocks a protected source. Downloads
+go to a temporary directory; `--staging <dir>` reuses a directory and `--keep`
+preserves the temporary one.
 
 ### `config`
 
