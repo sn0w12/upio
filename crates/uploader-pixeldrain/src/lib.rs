@@ -20,10 +20,16 @@ use serde_json::Value;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_io_error, map_reqwest_error};
-use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::service::{BuildError, Credential, DownloadDef, ServiceDef};
 use upio_core::types::{
     BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
 };
+
+#[cfg(feature = "download")]
+mod download;
+
+#[cfg(feature = "download")]
+pub use download::PixeldrainDownloader;
 
 const BASE_URL: &str = "https://pixeldrain.com";
 const FILE_API: &str = "https://pixeldrain.com/api/file";
@@ -498,6 +504,11 @@ impl PixeldrainUploader {
     }
 }
 
+#[cfg(feature = "download")]
+const DOWNLOAD: Option<DownloadDef> = Some(download::PIXELDRAIN_DOWNLOAD);
+#[cfg(not(feature = "download"))]
+const DOWNLOAD: Option<DownloadDef> = None;
+
 pub static PIXELDRAIN_SERVICE: ServiceDef = ServiceDef {
     name: PixeldrainUploader::NAME,
     display_name: "Pixeldrain",
@@ -507,7 +518,7 @@ pub static PIXELDRAIN_SERVICE: ServiceDef = ServiceDef {
     capabilities: PixeldrainUploader::CAPABILITIES,
     max_file_size: PixeldrainUploader::MAX_FILE_SIZE,
     build,
-    download: None,
+    download: DOWNLOAD,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

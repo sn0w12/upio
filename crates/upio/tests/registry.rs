@@ -64,6 +64,20 @@ fn gofile_share_urls_are_registered() {
 
 #[cfg(feature = "download")]
 #[test]
+fn pixeldrain_share_urls_are_registered() {
+    let id = UploaderId::from_url("https://pixeldrain.com/u/abc123").unwrap();
+    assert_eq!(id.name(), "pixeldrain");
+    assert!(id.supports_download());
+
+    let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
+    assert_eq!(downloader.name(), "pixeldrain");
+
+    let list = UploaderId::from_url("https://pixeldra.in/l/abc123").unwrap();
+    assert_eq!(list.name(), "pixeldrain");
+}
+
+#[cfg(feature = "download")]
+#[test]
 fn filester_share_urls_are_registered() {
     let id = UploaderId::from_url("https://filester.me/d/abc123").unwrap();
     assert_eq!(id.name(), "filester");
