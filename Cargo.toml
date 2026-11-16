@@ -12,7 +12,7 @@ members = [
     "crates/upio",
     "crates/config",
     "crates/cli",
-    'crates/gui',
+    "crates/gui",
 ]
 default-members = ["crates/cli"]
 
