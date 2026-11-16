@@ -15,7 +15,7 @@ Currently supported services:
 | GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | Yes      | All          |
 | Fileditch   | `uploader-fileditch`  | No            | No             | Yes      | All          |
 | Filester.me | `uploader-filester`   | Optional\*    | Yes            | Yes      | All          |
-| GoonBox     | `uploader-goonbox`    | Yes           | Yes            | No       | Image        |
+| GoonBox     | `uploader-goonbox`    | Yes           | Yes            | Yes      | Image        |
 | Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | Yes      | All          |
 
 \* Optional. Anonymous uploads work without auth, however some functionality may be locked behind it.

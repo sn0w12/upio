@@ -11,6 +11,12 @@
 mod login;
 mod waf;
 
+#[cfg(feature = "download")]
+mod download;
+
+#[cfg(feature = "download")]
+pub use download::GoonboxDownloader;
+
 use async_trait::async_trait;
 use serde::Deserialize;
 use serde_json::Value;
@@ -20,7 +26,7 @@ use tokio::sync::RwLock;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_reqwest_error, tracked_file_part};
-use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::service::{BuildError, Credential, DownloadDef, ServiceDef};
 use upio_core::types::{
     BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
 };
@@ -418,6 +424,11 @@ pub(crate) fn error_from_value(value: &Value, status_code: u16, fallback: &str) 
     }
 }
 
+#[cfg(feature = "download")]
+const DOWNLOAD: Option<DownloadDef> = Some(download::GOONBOX_DOWNLOAD);
+#[cfg(not(feature = "download"))]
+const DOWNLOAD: Option<DownloadDef> = None;
+
 pub static GOONBOX_SERVICE: ServiceDef = ServiceDef {
     name: GoonboxUploader::NAME,
     display_name: "GoonBox",
@@ -427,7 +438,7 @@ pub static GOONBOX_SERVICE: ServiceDef = ServiceDef {
     capabilities: GoonboxUploader::CAPABILITIES,
     max_file_size: GoonboxUploader::MAX_FILE_SIZE,
     build,
-    download: None,
+    download: DOWNLOAD,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

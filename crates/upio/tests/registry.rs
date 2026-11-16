@@ -78,6 +78,23 @@ fn pixeldrain_share_urls_are_registered() {
 
 #[cfg(feature = "download")]
 #[test]
+fn goonbox_share_urls_are_registered() {
+    let id = UploaderId::from_url("https://goonbox.cr/img/abc123").unwrap();
+    assert_eq!(id.name(), "goonbox");
+    assert!(id.supports_download());
+
+    let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
+    assert_eq!(downloader.name(), "goonbox");
+
+    let album = UploaderId::from_url("https://goonbox.cr/a/abc123").unwrap();
+    assert_eq!(album.name(), "goonbox");
+
+    let profile = UploaderId::from_url("https://goonbox.cr/u/alice").unwrap();
+    assert_eq!(profile.name(), "goonbox");
+}
+
+#[cfg(feature = "download")]
+#[test]
 fn filester_share_urls_are_registered() {
     let id = UploaderId::from_url("https://filester.me/d/abc123").unwrap();
     assert_eq!(id.name(), "filester");

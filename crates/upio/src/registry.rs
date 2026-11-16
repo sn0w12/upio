@@ -153,15 +153,12 @@ pub fn build_uploader(
 /// credential that is absent, and [`BuildError::Init`] on construction failure.
 ///
 /// ```
-/// use upio::registry::{build_downloader, BuildError, UploaderId};
+/// use upio::registry::{build_downloader, UploaderId};
 /// use upio::UploaderEndpointConfig;
 ///
 /// let id = UploaderId::from_name("goonbox").unwrap();
-/// let err = match build_downloader(id, &UploaderEndpointConfig::default()) {
-///     Ok(_) => panic!("goonbox built a downloader without support"),
-///     Err(error) => error,
-/// };
-/// assert!(matches!(err, BuildError::Unsupported(_)));
+/// let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
+/// assert_eq!(downloader.name(), "goonbox");
 /// ```
 pub fn build_downloader(
     id: UploaderId,
