@@ -9,7 +9,7 @@ use crate::config::Config;
 use crate::ConfigError;
 
 /// A typed, exhaustive set of editable config keys.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum ConfigKey {
     GlobalDisabledUploaders,
     GlobalDisabledDownloaders,

@@ -1,13 +1,14 @@
-use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use crate::state::gui_state::use_gui_state;
+use rune::Color;
+use rune_kit::{Kit, Palette, StateColors};
+
+use crate::coss::{mix, over, Coss};
 
 /// The user's theme preference.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThemeMode {
-    /// Follow the OS setting.
     #[default]
     System,
     Light,
@@ -15,118 +16,128 @@ pub enum ThemeMode {
 }
 
 impl ThemeMode {
-    /// The canonical lowercase name, as stored in `gui.toml`.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            ThemeMode::System => "system",
-            ThemeMode::Light => "light",
-            ThemeMode::Dark => "dark",
-        }
-    }
-
-    /// The display label.
     pub const fn label(self) -> &'static str {
         match self {
-            ThemeMode::System => "System",
-            ThemeMode::Light => "Light",
-            ThemeMode::Dark => "Dark",
+            Self::System => "Auto",
+            Self::Light => "Light",
+            Self::Dark => "Dark",
         }
     }
 
-    /// Parse a mode from its canonical name.
-    pub fn parse(value: &str) -> Self {
-        match value {
-            "light" => ThemeMode::Light,
-            "dark" => ThemeMode::Dark,
-            _ => ThemeMode::System,
+    pub fn dark(self, system_dark: bool) -> bool {
+        match self {
+            Self::System => system_dark,
+            Self::Light => false,
+            Self::Dark => true,
         }
     }
 }
 
-/// The theme context provided by [`ThemeProvider`].
-#[derive(Clone, Copy)]
-pub struct ThemeContext {
-    /// The user's theme preference.
-    pub mode: Signal<ThemeMode>,
-    /// The resolved (effective) dark state, after applying the preference to
-    /// the system setting.
-    pub is_dark: Signal<bool>,
+pub fn kit(dark: bool) -> Kit {
+    let mut kit = Kit::neutral(dark);
+    kit.c = palette(&Coss::new(dark));
+    kit.radius.sm = 6.0;
+    kit.radius.md = 8.0;
+    kit.radius.lg = 11.0;
+    kit.radius.xl = 14.0;
+    kit
 }
 
-/// Access the current theme preference and resolved dark state.
-///
-/// Must be called inside a [`ThemeProvider`].
-pub fn use_theme() -> ThemeContext {
-    use_context::<ThemeContext>()
-}
-
-/// Provides the theme to the app and keeps the `dark` class on `<html>`
-/// in sync with the resolved (light/dark) theme.
-#[component]
-pub fn ThemeProvider(children: Element) -> Element {
-    let mut gui = use_gui_state();
-    let mode = use_signal(|| gui.state.peek().theme);
-    let system_dark = use_signal(|| false);
-    let mut is_dark = use_signal(|| false);
-
-    // Persist preference changes back into the GUI state file.
-    use_effect(move || {
-        let current = mode();
-        if gui.state.peek().theme != current {
-            gui.state.write().theme = current;
+fn palette(c: &Coss) -> Palette {
+    let mut p = Kit::neutral(c.dark).c;
+    let base = c.bg;
+    let card = c.card;
+    let secondary = over(c.secondary, card);
+    let accent = over(c.accent, card);
+    let faint = mix(c.muted_fg, base, 0.62);
+    let sheen = |a: f32| {
+        if c.dark {
+            Color::BLACK.alpha(a)
+        } else {
+            Color::WHITE.alpha(a)
         }
-    });
+    };
+    let state = |soft: Color, fg: Color, strong: Color| StateColors {
+        bg: over(soft, card),
+        fg,
+        border: over(strong.alpha(0.28), card),
+        icon: fg,
+    };
 
-    // Subscribe to the OS color-scheme and keep `system_dark` updated. The
-    // JS media-query listener is registered under a named cleanup handle so
-    // remounts replace it instead of stacking; `use_drop` unregisters it.
-    dioxus::core::use_drop(|| {
-        _ = document::eval(
-            "if (window.__upioColorSchemeCleanup) { \
-                 window.__upioColorSchemeCleanup(); \
-                 delete window.__upioColorSchemeCleanup; \
-             }",
-        );
-    });
+    p.page = base;
+    p.bg_base = base;
+    p.bg_deep = c.sidebar;
+    p.layer_01 = card;
+    p.layer_02 = secondary;
+    p.layer_03 = over(sheen(0.05), card);
+    p.layer_04 = over(sheen(0.09), card);
+    p.bg_inverse = c.primary;
+    p.bg_contrast = c.primary;
+    p.bg_button_neutral = secondary;
+    p.bg_icon_button_contrast = c.primary;
+    p.bg_accent = c.primary;
+    p.submit_highlight = sheen(0.12);
+    p.submit_hover = sheen(0.16);
+    p.submit_fg = c.primary_fg;
+    p.submit_icon = c.primary_fg;
 
-    use_effect(move || {
-        let mut eval = document::eval(
-            r#"
-            if (window.__upioColorSchemeCleanup) {
-                window.__upioColorSchemeCleanup();
-            }
-            const mq = window.matchMedia('(prefers-color-scheme: dark)');
-            const handler = (e) => dioxus.send(e.matches);
-            mq.addEventListener('change', handler);
-            window.__upioColorSchemeCleanup = () => mq.removeEventListener('change', handler);
-            dioxus.send(mq.matches);
-            "#,
-        );
-        let mut system_dark = system_dark;
-        spawn(async move {
-            while let Ok(matches) = eval.recv::<bool>().await {
-                system_dark.set(matches);
-            }
-        });
-    });
+    p.text_base = c.fg;
+    p.text_muted = c.muted_fg;
+    p.text_faint = faint;
+    p.text_inverse = c.primary_fg;
+    p.text_contrast = c.primary_fg;
+    p.text_accent = c.fg;
 
-    // Resolve the effective dark state from the preference + system setting
-    // and apply the `dark` class to the document root.
-    use_effect(move || {
-        let dark = match mode() {
-            ThemeMode::Light => false,
-            ThemeMode::Dark => true,
-            ThemeMode::System => system_dark(),
-        };
-        is_dark.set(dark);
-        _ = document::eval(&format!(
-            "document.documentElement.classList.toggle('dark', {dark});"
-        ));
-    });
+    p.icon_base = c.fg;
+    p.icon_muted = c.muted_fg;
+    p.icon_faint = faint;
+    p.icon_inverse = c.primary_fg;
+    p.icon_contrast = c.primary_fg;
+    p.icon_accent = c.fg;
 
-    use_context_provider(|| ThemeContext { mode, is_dark });
+    p.border_muted = c.sidebar_border;
+    p.border_base = c.border;
+    p.border_strong = c.input;
+    p.border_focus = c.ring;
 
-    rsx! {
-        {children}
-    }
+    p.hover = accent;
+    p.pressed = over(sheen(0.06), card);
+    p.contrast_hover = sheen(0.10);
+    p.contrast_pressed = sheen(0.16);
+    p.scrim = Color::BLACK.alpha(0.45);
+    p.depth_top = Color::WHITE.alpha(0.18);
+    p.depth_bottom = Color::BLACK.alpha(0.10);
+    p.white = Color::WHITE;
+    p.black = Color::BLACK;
+    p.knob = over(Color::WHITE, card);
+    p.knob_on = c.primary_fg;
+
+    p.success = state(c.success_soft, c.success_fg, c.success);
+    p.warning = state(c.warning_soft, c.warning_fg, c.warning);
+    p.danger = state(c.destructive_soft, c.destructive_fg, c.destructive);
+    p.info = state(c.info_soft, c.info_fg, c.info);
+
+    p.surface_base = card;
+    p.surface_weak = secondary;
+    p.surface_hover = accent;
+    p.surface_raised = card;
+    p.surface_raised_base = card;
+    p.surface_raised_hover = secondary;
+    p.surface_float = c.popover;
+    p.surface_disabled = secondary;
+    p.border_weak = c.sidebar_border;
+    p.border_hover = c.input;
+    p.border_active = c.input;
+    p.border_disabled = c.sidebar_border;
+    p.text_strong = c.fg;
+    p.text_weak = faint;
+    p.text_invert_strong = c.primary_fg;
+    p.icon_weaker = faint;
+    p.std_border = c.border;
+    p.std_icon = c.fg;
+    p.std_icon_invert = c.primary_fg;
+    p.std_icon_strong = c.fg;
+    p.std_text = c.fg;
+
+    p
 }

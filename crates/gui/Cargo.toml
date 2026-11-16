@@ -1,28 +1,63 @@
 [package]
 name = "upio-gui"
-version = "0.1.0"
+description = "upio desktop GUI built with Rune and rune-kit"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
+
+[[bin]]
+name = "upio"
+path = "src/main.rs"
+
+[build-dependencies]
+winresource = "0.1"
+
+[package.metadata.packager]
+before-packaging-command = "cargo build --release -p upio-gui"
+product-name = "upio"
+identifier = "com.upio.app"
+publisher = "upio"
+category = "Utility"
+out-dir = "../../dist"
+icons = [
+    "assets/app-icons/32x32.png",
+    "assets/app-icons/64x64.png",
+    "assets/app-icons/128x128.png",
+    "assets/app-icons/128x128@2x.png",
+    "assets/app-icons/icon.icns",
+    "assets/app-icons/icon.ico",
+]
+
+[package.metadata.packager.deb]
+package-name = "upio"
+section = "utils"
+
+[package.metadata.packager.nsis]
+installer-icon = "assets/app-icons/icon.ico"
+installMode = "currentUser"
+appdata-paths = ["$APPDATA/upio"]
 
 [dependencies]
 upio = { workspace = true }
 upio-config = { workspace = true }
-dioxus = { workspace = true }
-dioxus-icons = { workspace = true }
-dioxus-primitives = { workspace = true }
-tw_merge = { workspace = true, features = ["variant"]}
-tokio = { workspace = true, features = ["rt", "time"] }
+rune = { workspace = true }
+rune-kit = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
+futures = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true }
 toml = { workspace = true }
 dirs = { workspace = true }
-futures = { workspace = true }
-rfd = { workspace = true }
-arboard = { workspace = true }
+walkdir = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }
 
-[features]
-default = ["desktop"]
-desktop = ["dioxus/desktop"]
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.2.2", default-features = false, features = [
+    "NSApplication",
+    "NSAppearance",
+    "NSResponder",
+    "NSColor",
+    "NSWindow",
+] }
+objc2-foundation = { version = "0.2.2", features = ["NSThread"] }

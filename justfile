@@ -5,9 +5,11 @@ set shell := ['sh', '-cu']
 set positional-arguments
 set default-list
 
-# Install developer tools and generated GUI assets (run once after cloning)
+alias bundle := package
+
+# Install developer tools (run once after cloning)
 [group('setup')]
-setup: gui-install gui-css
+setup:
     rustup component add clippy rustfmt
 
 # Format all Rust code
@@ -22,17 +24,17 @@ fmt-check:
 
 # Lint the whole workspace with all targets and features
 [group('check')]
-clippy: gui-css
+clippy:
     cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Type-check the workspace
 [group('check')]
-check: gui-css
+check:
     cargo check --workspace --all-targets
 
 # Type-check the workspace with every feature
 [group('check')]
-check-all: gui-css
+check-all:
     cargo check --workspace --all-targets --all-features
 
 # Check the library without default features
@@ -42,7 +44,7 @@ check-no-default:
 
 # Run the workspace tests
 [group('check')]
-test: gui-css
+test:
     cargo test --workspace
 
 # Run the download-feature tests
@@ -57,13 +59,13 @@ ci: setup fmt-check clippy check-no-default test test-download docs-check
 
 # Fix formatting and clippy issues automatically
 [group('check')]
-fix: gui-css
+fix:
     cargo clippy --workspace --all-targets --all-features --fix --allow-dirty --allow-staged
     cargo fmt --all
 
 # Build the workspace in debug mode
 [group('build')]
-build: gui-css
+build:
     cargo build --workspace
 
 # Build the release CLI
@@ -87,25 +89,25 @@ cli *args:
 cli *args:
     cargo run -p upio-cli -- "$@"
 
-# Install the GUI's JavaScript dependencies
-[group('gui')]
-gui-install:
-    npm --prefix crates/gui ci --no-audit --no-fund
-
-# Build the GUI's Tailwind stylesheet
-[group('gui')]
-gui-css:
-    npm --prefix crates/gui run build:css
-
-# Run the desktop GUI (run `just setup` once first)
+# Run the desktop GUI
 [group('run')]
-gui: gui-css
-    dx serve -p upio-gui --desktop
+gui:
+    cargo run -p upio-gui
 
-# Bundle the GUI as a Windows MSI (run `just setup` once first)
+# Build the release GUI binary
 [group('gui')]
-bundle-win: gui-css
-    dx bundle -p upio-gui --desktop --package-types msi
+gui-release:
+    cargo build --release -p upio-gui
+
+# Build the installer or app bundle for the host platform (needs cargo-packager)
+[group('gui')]
+package:
+    cargo packager --release -p upio-gui
+
+# Regenerate the app icon set from the brand logo
+[group('gui')]
+icons:
+    npx --yes @tauri-apps/cli@latest icon crates/gui/assets/brand/logo.png -o crates/gui/assets/app-icons
 
 # Regenerate the generated documentation tables
 [group('docs')]
@@ -116,3 +118,4 @@ docs:
 [group('docs')]
 docs-check:
     cargo run -p upio --example readme --all-features -- --check
+

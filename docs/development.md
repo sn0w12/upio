@@ -10,7 +10,7 @@
 | `crates/upio`         | Unified library: feature flags, the upload pipeline, and the service registry.  |
 | `crates/config`       | Config model, layered env/file reader, typed keys, and atomic writes.           |
 | `crates/cli`          | The `upio` command-line binary.                                                 |
-| `crates/gui`          | The `upio-gui` Dioxus desktop app.                                              |
+| `crates/gui`          | The `upio-gui` Rune desktop app.                                                |
 
 ## Versioning
 

@@ -2,7 +2,4 @@
 *.pdb
 .DS_Store
 **/*.rs.bk
-
-__pycache__
-node_modules
-crates/gui/assets/tailwind.css
+/dist
