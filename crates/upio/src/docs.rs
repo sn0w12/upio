@@ -1,9 +1,10 @@
-//! Generation of the README tables.
+//! Generation of the documentation tables.
 //!
 //! The services and preprocessing tables are derived from [`UploaderId`] and
 //! [`STRATEGIES`], so adding a service or strategy updates the docs with
 //! `cargo run -p upio --example readme` instead of a manual edit. Each table
-//! sits between `BEGIN`/`END` marker comments that [`sync`] replaces in place.
+//! sits between `BEGIN`/`END` marker comments that [`sync_blocks`] replaces in
+//! place.
 
 use crate::preprocess::tools::Tool;
 use crate::preprocess::{RuleTrigger, STRATEGIES};
@@ -20,7 +21,7 @@ const BLOCKS: &[(&str, Render)] = &[
 const OPTIONAL_TOKEN_NOTE: &str = "\\* Optional. Anonymous uploads work without auth, however \
                                    some functionality may be locked behind it.";
 
-/// An error produced while syncing a README.
+/// An error produced while syncing documentation.
 #[derive(Debug, PartialEq, Eq)]
 pub enum DocsError {
     /// A generated block has no `BEGIN` marker.
@@ -35,7 +36,7 @@ impl std::fmt::Display for DocsError {
             DocsError::MissingBlock(block) => write!(
                 f,
                 "missing the '{block}' block; add <!-- BEGIN generated: {block} --> and \
-                 <!-- END generated: {block} --> to the README"
+                 <!-- END generated: {block} --> to the document"
             ),
             DocsError::UnterminatedBlock(block) => {
                 write!(
@@ -49,18 +50,27 @@ impl std::fmt::Display for DocsError {
 
 impl std::error::Error for DocsError {}
 
-/// Replace every generated block in `readme` with the table rendered from the
+/// Replace every generated block in `text` with the table rendered from the
 /// current code.
 ///
 /// Returns an error when a block's markers are missing, since that block would
 /// otherwise silently go stale.
-pub fn sync(readme: &str) -> Result<String, DocsError> {
-    let eol = line_ending(readme);
-    BLOCKS
-        .iter()
-        .try_fold(readme.to_string(), |text, (block, render)| {
-            replace_block(&text, block, &render(), eol)
-        })
+pub fn sync(text: &str) -> Result<String, DocsError> {
+    sync_blocks(text, &["services", "strategies"])
+}
+
+/// Replace the named generated blocks in `text`.
+pub fn sync_blocks(text: &str, blocks: &[&str]) -> Result<String, DocsError> {
+    let eol = line_ending(text);
+    blocks.iter().try_fold(text.to_string(), |text, block| {
+        let name = *block;
+        let render = BLOCKS
+            .iter()
+            .find(|(known, _)| *known == name)
+            .map(|(_, render)| *render)
+            .ok_or_else(|| DocsError::MissingBlock(name.to_string()))?;
+        replace_block(&text, name, &render(), eol)
+    })
 }
 
 /// The services table and, when a service accepts anonymous uploads, the
@@ -83,7 +93,6 @@ pub fn services_table() -> String {
 
             vec![
                 def.display_name.to_string(),
-                format!("`{}`", def.crate_name),
                 auth.to_string(),
                 yes_no(def.supports_folders),
                 yes_no(def.download.is_some()),
@@ -95,7 +104,6 @@ pub fn services_table() -> String {
     let mut table = render_table(
         &[
             "Service",
-            "Crate",
             "Auth Required",
             "Folder / album",
             "Download",
@@ -269,7 +277,7 @@ fn requirements_label(tools: &[Tool]) -> String {
 mod tests {
     use super::*;
 
-    const README: &str = "\
+    const DOC: &str = "\
 Intro
 
 <!-- BEGIN generated: services -->
@@ -287,7 +295,7 @@ Outro
 
     #[test]
     fn sync_replaces_every_block() {
-        let synced = sync(README).unwrap();
+        let synced = sync(DOC).unwrap();
 
         assert!(!synced.contains("stale"));
         assert!(synced.contains(&services_table()));
@@ -297,15 +305,33 @@ Outro
     }
 
     #[test]
+    fn sync_blocks_updates_only_the_named_block() {
+        let text = "\
+Intro
+
+<!-- BEGIN generated: services -->
+stale
+<!-- END generated: services -->
+
+Outro
+";
+        let synced = sync_blocks(text, &["services"]).unwrap();
+
+        assert!(synced.contains(&services_table()));
+        assert!(synced.starts_with("Intro"));
+        assert!(synced.ends_with("Outro\n"));
+    }
+
+    #[test]
     fn sync_is_idempotent() {
-        let synced = sync(README).unwrap();
+        let synced = sync(DOC).unwrap();
         assert_eq!(sync(&synced).unwrap(), synced);
     }
 
     #[test]
     fn sync_preserves_crlf() {
-        let readme = README.replace('\n', "\r\n");
-        let synced = sync(&readme).unwrap();
+        let doc = DOC.replace('\n', "\r\n");
+        let synced = sync(&doc).unwrap();
 
         assert!(!synced.replace("\r\n", "").contains('\n'));
         assert_eq!(sync(&synced).unwrap(), synced);
