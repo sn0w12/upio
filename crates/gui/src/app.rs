@@ -665,7 +665,6 @@ impl App {
                 self.dirty = false;
                 self.save_error = None;
                 self.raw = TextEdit::new(self.config.to_toml().unwrap_or_default());
-                self.set_notice("Settings saved.");
             }
             Err(error) => {
                 self.save_error = Some(error.to_string());
