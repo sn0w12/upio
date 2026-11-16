@@ -36,7 +36,7 @@ fn sync_file(path: &Path, blocks: &[&str], check: bool) -> Result<(), String> {
 
     if check {
         return Err(format!(
-            "{} is out of date; run `just readme`",
+            "{} is out of date; run `just docs`",
             path.display()
         ));
     }

@@ -20,6 +20,10 @@ crate are released together from the workspace version. The `upio-config` and
 
 ## Checks
 
+The `justfile` wraps the common commands. Run `just setup` once after cloning,
+then `just ci` for the full local check. `just` with no arguments lists every
+recipe.
+
 ```sh
 cargo build --workspace
 cargo test --workspace
