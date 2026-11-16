@@ -15,18 +15,16 @@
 //!   `apply_native_profile` plus a persistent profile directory are both
 //!   required, not optional hardening.
 
-use anyhow::{anyhow, bail, Context, Result};
-use chaser_oxide::cdp::browser_protocol::{
-    dom::{GetBoxModelParams, GetDocumentParams, ScrollIntoViewIfNeededParams},
-    page::AddScriptToEvaluateOnNewDocumentParams,
-    target::CreateTargetParams,
+use anyhow::{bail, Context, Result};
+use chaser_oxide::cdp::browser_protocol::dom::{
+    GetBoxModelParams, GetDocumentParams, ScrollIntoViewIfNeededParams,
 };
 use chaser_oxide::layout::Point;
-use chaser_oxide::{Browser, BrowserConfig, ChaserPage, Page};
-use futures::StreamExt;
+use chaser_oxide::{ChaserPage, Page};
 use rand::Rng;
 use std::path::Path;
 use std::time::{Duration, Instant};
+use upio_browser::BrowserSession;
 
 /// Let the widget solve itself for this long before any clicking starts.
 /// Managed-mode Turnstile usually self-solves, and clicking during the
@@ -60,59 +58,23 @@ const READ_TOKEN: &str = r#"
 
 /// Load the login page and return the Turnstile token it produces.
 pub async fn solve(login_url: &str, profile_dir: &Path) -> Result<String> {
-    let _display = VirtualDisplay::start_if_needed();
-    let profile = resolve_profile(profile_dir)?;
-
-    let config = BrowserConfig::builder()
-        .viewport(None)
-        .with_head()
-        .hide()
-        .user_data_dir(&profile)
-        .build()
-        .map_err(|e| anyhow!("browser config: {e}"))?;
-
-    let (browser, mut handler) = Browser::launch(config)
+    let session = BrowserSession::launch_with_profile(profile_dir)
         .await
         .context("failed to launch Chrome")?;
-    tokio::spawn(async move { while handler.next().await.is_some() {} });
-
-    let page = browser
-        .new_page(CreateTargetParams::new("about:blank"))
-        .await
-        .context("failed to create page")?;
-
-    let chaser = ChaserPage::new(page.clone());
-    chaser
-        .apply_native_profile()
-        .await
-        .context("failed to apply native profile")?;
-
-    page.execute(AddScriptToEvaluateOnNewDocumentParams {
-        source: WEBDRIVER_OVERRIDE.to_string(),
-        world_name: None,
-        include_command_line_api: None,
-        run_immediately: None,
-    })
-    .await
-    .context("failed to inject webdriver override")?;
-
-    chaser
+    session
         .goto(login_url)
         .await
         .context("failed to open the goonbox login page")?;
 
-    match wait_for_token(&chaser).await {
+    match wait_for_token(session.chaser()).await {
         Some(token) => Ok(token),
-        None => {
-            drop(browser);
-            bail!(
-                "the goonbox captcha did not clear within {}s. Chrome needs a display: on a \
-                 headless server install Xvfb (apt install xvfb), or open Chrome once with the \
-                 profile at {} and solve the challenge there.",
-                SOLVE_TIMEOUT.as_secs(),
-                profile.display()
-            )
-        }
+        None => bail!(
+            "the goonbox captcha did not clear within {}s. Chrome needs a display: on a \
+             headless server install Xvfb (apt install xvfb), or open Chrome once with the \
+             profile at {} and solve the challenge there.",
+            SOLVE_TIMEOUT.as_secs(),
+            profile_dir.display()
+        ),
     }
 }
 
@@ -437,101 +399,4 @@ async fn move_and_click(page: &Page, tx: f64, ty: f64) {
 
     tokio::time::sleep(Duration::from_millis(approach.settle_ms)).await;
     let _ = page.click(Point::new(tx, ty)).await;
-}
-
-/// Page-level driver tells. `apply_native_profile` covers the CDP-level ones;
-/// without both, Cloudflare returns a token that fails verification.
-const WEBDRIVER_OVERRIDE: &str = r#"
-(function() {
-  try {
-    var proto = Object.getPrototypeOf(navigator);
-    if (proto) {
-      try { delete proto.webdriver; } catch (e) {}
-      Object.defineProperty(proto, 'webdriver', {
-        get: function() { return false; },
-        configurable: true,
-        enumerable: true
-      });
-    }
-  } catch (e) {
-    try { delete navigator.webdriver; } catch (e2) {}
-  }
-  var props = Object.getOwnPropertyNames(window);
-  for (var i = 0; i < props.length; i++) {
-    if (/^cdc_|^\$cdc_|^__webdriver|^__selenium|^__driver|^\$chrome_/.test(props[i])) {
-      try { delete window[props[i]]; } catch (e) {}
-    }
-  }
-})();
-"#;
-
-/// Chrome needs a display even when nobody is watching, because headless mode
-/// is itself a detection signal. On Linux without `DISPLAY`, Xvfb supplies one.
-struct VirtualDisplay {
-    #[allow(dead_code)]
-    child: Option<std::process::Child>,
-}
-
-impl VirtualDisplay {
-    #[cfg(target_os = "linux")]
-    fn start_if_needed() -> Self {
-        if !std::env::var("DISPLAY").unwrap_or_default().is_empty() {
-            return Self { child: None };
-        }
-
-        // A leftover Xvfb from a crashed run is reusable and cheaper than a
-        // second one racing for the same display number.
-        let lock = Path::new("/tmp/.X99-lock");
-        if lock.exists() {
-            unsafe { std::env::set_var("DISPLAY", ":99") };
-            return Self { child: None };
-        }
-
-        let spawned = std::process::Command::new("Xvfb")
-            .args([
-                ":99",
-                "-screen",
-                "0",
-                "1920x1080x24",
-                "-ac",
-                "+extension",
-                "GLX",
-                "+render",
-                "-noreset",
-            ])
-            .spawn();
-
-        let child = match spawned {
-            Ok(child) => child,
-            Err(_) => return Self { child: None },
-        };
-
-        unsafe { std::env::set_var("DISPLAY", ":99") };
-        for _ in 0..50 {
-            if lock.exists() {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-
-        Self { child: Some(child) }
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    fn start_if_needed() -> Self {
-        Self { child: None }
-    }
-}
-
-fn resolve_profile(profile_dir: &Path) -> Result<std::path::PathBuf> {
-    let path = if profile_dir.is_absolute() {
-        profile_dir.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .unwrap_or_default()
-            .join(profile_dir)
-    };
-    std::fs::create_dir_all(&path)
-        .with_context(|| format!("could not create the Chrome profile at {}", path.display()))?;
-    Ok(std::fs::canonicalize(&path).unwrap_or(path))
 }

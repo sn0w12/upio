@@ -2,6 +2,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use upio_core::download::ConflictPolicy;
 use upio_core::UploaderEndpointConfig;
 
 use crate::key::ConfigKey;
@@ -32,12 +33,55 @@ pub struct Config {
 pub struct GlobalConfig {
     #[serde(default)]
     pub disabled_uploaders: Vec<String>,
+    #[serde(default)]
+    pub disabled_downloaders: Vec<String>,
+    #[serde(default)]
+    pub download: DownloadSettings,
+}
+
+/// Defaults applied when `upio download` is invoked without explicit flags.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadSettings {
+    /// Where files are written. Unset means the current directory.
+    #[serde(default)]
+    pub output_dir: Option<PathBuf>,
+    #[serde(default = "default_download_concurrency")]
+    pub concurrency: usize,
+    #[serde(default = "default_true")]
+    pub resume: bool,
+    #[serde(default)]
+    pub on_conflict: ConflictPolicy,
+}
+
+impl Default for DownloadSettings {
+    fn default() -> Self {
+        Self {
+            output_dir: None,
+            concurrency: default_download_concurrency(),
+            resume: true,
+            on_conflict: ConflictPolicy::default(),
+        }
+    }
+}
+
+fn default_download_concurrency() -> usize {
+    4
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Whether an uploader is enabled: exact, allocation-free comparison of its
 /// canonical name against `global.disabled_uploaders`. Unknown disabled names
 /// are inert; only exact canonical names disable a service.
 pub fn is_uploader_enabled(disabled: &[String], name: &str) -> bool {
+    !disabled.iter().any(|d| d == name)
+}
+
+/// Whether a downloader is enabled, with the same exact-name matching rules as
+/// [`is_uploader_enabled`].
+pub fn is_downloader_enabled(disabled: &[String], name: &str) -> bool {
     !disabled.iter().any(|d| d == name)
 }
 

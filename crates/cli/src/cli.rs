@@ -6,7 +6,7 @@ use clap::{Parser, Subcommand};
 #[command(
     name = "upio",
     version,
-    about = "Upload files to various hosting services"
+    about = "Upload and download files from various hosting services"
 )]
 pub struct Cli {
     /// Path to an alternate config file
@@ -52,6 +52,42 @@ fn default_uploaders() -> Vec<String> {
     vec!["bunkr".to_string()]
 }
 
+/// Arguments for the `download` subcommand.
+#[derive(Debug, Parser)]
+#[command(about = "Download files from supported share URLs")]
+pub struct DownloadArgs {
+    /// Share URLs to download
+    pub urls: Vec<String>,
+
+    /// Output directory (defaults to global.download.output_dir or the current directory)
+    #[arg(short = 'o', long)]
+    pub output: Option<PathBuf>,
+
+    /// Maximum concurrent file downloads (defaults to global.download.concurrency)
+    #[arg(short = 'c', long)]
+    pub concurrency: Option<usize>,
+
+    /// Do not resume partial files
+    #[arg(long)]
+    pub no_resume: bool,
+
+    /// What to do when the destination exists
+    #[arg(long, value_name = "POLICY", value_parser = ["rename", "skip", "overwrite"])]
+    pub on_conflict: Option<String>,
+
+    /// Password for protected share links without a ?password= parameter
+    #[arg(short = 'p', long)]
+    pub password: Option<String>,
+
+    /// Put files directly in the output directory without remote folder names
+    #[arg(long)]
+    pub flat: bool,
+
+    /// Resolve and print planned files without downloading
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Commands {
     /// Upload files
@@ -59,12 +95,17 @@ pub enum Commands {
         #[command(flatten)]
         args: UploadArgs,
     },
+    /// Download files from supported share URLs
+    Download {
+        #[command(flatten)]
+        args: DownloadArgs,
+    },
     /// Manage configuration
     Config {
         #[command(subcommand)]
         action: ConfigAction,
     },
-    /// List available uploaders
+    /// List available services
     List,
     /// Inspect the preprocessing setup
     Preprocess {

@@ -114,6 +114,22 @@ fn ServiceDetail(id: UploaderId) -> Element {
                                 placeholder: "auto",
                                 password: false,
                             }
+                            ConfigInput {
+                                config_key: ConfigKey::GofileLinkPassword,
+                                label: "Download link password",
+                                description: "Optional. Unlocks password-protected folders. A ?password= on the link takes precedence.",
+                                placeholder: "Folder password",
+                                password: true,
+                            }
+                        }
+                        if id.name() == "filester" {
+                            ConfigInput {
+                                config_key: ConfigKey::FilesterLinkPassword,
+                                label: "Download link password",
+                                description: "Optional. Unlocks password-protected folders. A ?password= on the link takes precedence.",
+                                placeholder: "Folder password",
+                                password: true,
+                            }
                         }
                     }
                 },
@@ -171,6 +187,13 @@ fn GoonboxFields() -> Element {
                 label: "Password",
                 description: "Required. The captcha is solved automatically when you upload.",
                 placeholder: "Your GoonBox password",
+                password: true,
+            }
+            ConfigInput {
+                config_key: ConfigKey::GoonboxToken,
+                label: "API key",
+                description: "Optional. Read-only key for downloading link-only albums and images.",
+                placeholder: "Paste a GoonBox API key",
                 password: true,
             }
         }

@@ -6,9 +6,10 @@ use crate::preprocess::PreprocessConfig;
 
 /// Per-endpoint configuration for a single hosting service.
 ///
-/// This carries everything a particular uploader needs to talk to its API:
-/// authentication token, destination folder, and any preprocessing rules. Each
-/// uploader implementation reads the fields it supports and ignores the rest.
+/// This carries everything a particular uploader or downloader needs to talk
+/// to its API: authentication, a share-link password, destination folder, and
+/// any preprocessing rules. Each implementation reads the fields it supports
+/// and ignores the rest.
 ///
 /// ```
 /// use upio_core::UploaderEndpointConfig;
@@ -28,6 +29,10 @@ pub struct UploaderEndpointConfig {
     pub username: Option<String>,
     /// Account password, for services that sign in rather than use a token.
     pub password: Option<String>,
+    /// Password for a password-protected share link. A `password` query
+    /// parameter on the download URL takes precedence.
+    #[serde(default)]
+    pub link_password: Option<String>,
     /// Destination folder / album ID.
     pub folder_id: Option<String>,
     /// Specific server to use (service-dependent); auto-selected when unset.

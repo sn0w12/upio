@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 
 use upio_core::filesize::FileSize;
 use upio_core::types::{UploaderCapabilities, UploaderEndpointConfig};
-use upio_core::BoxedUploader;
+use upio_core::{BoxedDownloader, BoxedUploader, DownloadDef};
 
 pub use upio_core::{BuildError, Credential, ServiceDef};
 
@@ -48,6 +48,33 @@ impl UploaderId {
 
     pub fn capabilities(self) -> UploaderCapabilities {
         self.0.capabilities
+    }
+
+    /// The download half of this service, when it has one.
+    pub fn download_def(self) -> Option<DownloadDef> {
+        self.0.download
+    }
+
+    /// Whether this service can resolve its share URLs for downloading.
+    pub fn supports_download(self) -> bool {
+        self.0.download.is_some()
+    }
+
+    /// Resolve a URL to the service that claims it.
+    ///
+    /// Only services with a download descriptor are considered, so an
+    /// upload-only service never intercepts a URL it cannot handle.
+    ///
+    /// ```
+    /// use upio::registry::UploaderId;
+    ///
+    /// assert_eq!(UploaderId::from_url("https://example.test/file"), None);
+    /// ```
+    pub fn from_url(url: &str) -> Option<Self> {
+        Self::ALL.iter().copied().find(|id| {
+            id.0.download
+                .is_some_and(|download| (download.parse)(url).is_some())
+        })
     }
 
     /// The maximum file size this service accepts, in bytes.
@@ -115,4 +142,33 @@ pub fn build_uploader(
     config: &UploaderEndpointConfig,
 ) -> Result<BoxedUploader, BuildError> {
     (id.0.build)(config)
+}
+
+/// Build a downloader for the given id from its endpoint config.
+///
+/// # Errors
+///
+/// Returns [`BuildError::Unsupported`] when the service has no download half,
+/// [`BuildError::MissingCredential`] when its download rules require a
+/// credential that is absent, and [`BuildError::Init`] on construction failure.
+///
+/// ```
+/// use upio::registry::{build_downloader, UploaderId};
+/// use upio::UploaderEndpointConfig;
+///
+/// let id = UploaderId::from_name("goonbox").unwrap();
+/// let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
+/// assert_eq!(downloader.name(), "goonbox");
+/// ```
+pub fn build_downloader(
+    id: UploaderId,
+    config: &UploaderEndpointConfig,
+) -> Result<BoxedDownloader, BuildError> {
+    match id.0.download {
+        Some(download) => (download.build)(config),
+        None => Err(BuildError::Unsupported(format!(
+            "{} does not support downloads",
+            id.name()
+        ))),
+    }
 }

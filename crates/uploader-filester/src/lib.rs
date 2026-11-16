@@ -4,10 +4,16 @@ use serde::Deserialize;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_reqwest_error, parse_json_response, tracked_file_part};
-use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::service::{BuildError, Credential, DownloadDef, ServiceDef};
 use upio_core::types::{
     BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
 };
+
+#[cfg(feature = "download")]
+mod download;
+
+#[cfg(feature = "download")]
+pub use download::FilesterDownloader;
 
 #[derive(Deserialize)]
 #[allow(dead_code)]
@@ -277,6 +283,11 @@ impl Uploader for FilesterUploader {
     }
 }
 
+#[cfg(feature = "download")]
+const DOWNLOAD: Option<DownloadDef> = Some(download::FILESTER_DOWNLOAD);
+#[cfg(not(feature = "download"))]
+const DOWNLOAD: Option<DownloadDef> = None;
+
 pub static FILESTER_SERVICE: ServiceDef = ServiceDef {
     name: FilesterUploader::NAME,
     display_name: "Filester.me",
@@ -286,6 +297,7 @@ pub static FILESTER_SERVICE: ServiceDef = ServiceDef {
     capabilities: FilesterUploader::CAPABILITIES,
     max_file_size: FilesterUploader::MAX_FILE_SIZE,
     build,
+    download: DOWNLOAD,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

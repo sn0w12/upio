@@ -1,6 +1,8 @@
 use std::fmt;
+use std::path::PathBuf;
 use std::str::FromStr;
 
+use upio_core::download::ConflictPolicy;
 use upio_core::UploaderEndpointConfig;
 
 use crate::config::Config;
@@ -10,15 +12,23 @@ use crate::ConfigError;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConfigKey {
     GlobalDisabledUploaders,
+    GlobalDisabledDownloaders,
+    GlobalDownloadOutputDir,
+    GlobalDownloadConcurrency,
+    GlobalDownloadResume,
+    GlobalDownloadOnConflict,
     BunkrToken,
     BunkrFolderId,
     GofileToken,
     GofileFolderId,
     GofileServer,
+    GofileLinkPassword,
     FilesterToken,
     FilesterFolderId,
+    FilesterLinkPassword,
     PixeldrainToken,
     PixeldrainFolderId,
+    GoonboxToken,
     GoonboxUsername,
     GoonboxPassword,
     GoonboxFolderId,
@@ -27,15 +37,23 @@ pub enum ConfigKey {
 impl ConfigKey {
     pub const ALL: &'static [ConfigKey] = &[
         Self::GlobalDisabledUploaders,
+        Self::GlobalDisabledDownloaders,
+        Self::GlobalDownloadOutputDir,
+        Self::GlobalDownloadConcurrency,
+        Self::GlobalDownloadResume,
+        Self::GlobalDownloadOnConflict,
         Self::BunkrToken,
         Self::BunkrFolderId,
         Self::GofileToken,
         Self::GofileFolderId,
         Self::GofileServer,
+        Self::GofileLinkPassword,
         Self::FilesterToken,
         Self::FilesterFolderId,
+        Self::FilesterLinkPassword,
         Self::PixeldrainToken,
         Self::PixeldrainFolderId,
+        Self::GoonboxToken,
         Self::GoonboxUsername,
         Self::GoonboxPassword,
         Self::GoonboxFolderId,
@@ -45,15 +63,23 @@ impl ConfigKey {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::GlobalDisabledUploaders => "global.disabled_uploaders",
+            Self::GlobalDisabledDownloaders => "global.disabled_downloaders",
+            Self::GlobalDownloadOutputDir => "global.download.output_dir",
+            Self::GlobalDownloadConcurrency => "global.download.concurrency",
+            Self::GlobalDownloadResume => "global.download.resume",
+            Self::GlobalDownloadOnConflict => "global.download.on_conflict",
             Self::BunkrToken => "bunkr.token",
             Self::BunkrFolderId => "bunkr.folder_id",
             Self::GofileToken => "gofile.token",
             Self::GofileFolderId => "gofile.folder_id",
             Self::GofileServer => "gofile.server",
+            Self::GofileLinkPassword => "gofile.link_password",
             Self::FilesterToken => "filester.token",
             Self::FilesterFolderId => "filester.folder_id",
+            Self::FilesterLinkPassword => "filester.link_password",
             Self::PixeldrainToken => "pixeldrain.token",
             Self::PixeldrainFolderId => "pixeldrain.folder_id",
+            Self::GoonboxToken => "goonbox.token",
             Self::GoonboxUsername => "goonbox.username",
             Self::GoonboxPassword => "goonbox.password",
             Self::GoonboxFolderId => "goonbox.folder_id",
@@ -67,8 +93,11 @@ impl ConfigKey {
             self,
             Self::BunkrToken
                 | Self::GofileToken
+                | Self::GofileLinkPassword
                 | Self::FilesterToken
+                | Self::FilesterLinkPassword
                 | Self::PixeldrainToken
+                | Self::GoonboxToken
                 | Self::GoonboxPassword
         )
     }
@@ -77,15 +106,29 @@ impl ConfigKey {
     pub fn get(self, config: &Config) -> String {
         match self {
             Self::GlobalDisabledUploaders => config.global.disabled_uploaders.join(", "),
+            Self::GlobalDisabledDownloaders => config.global.disabled_downloaders.join(", "),
+            Self::GlobalDownloadOutputDir => config
+                .global
+                .download
+                .output_dir
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .unwrap_or_default(),
+            Self::GlobalDownloadConcurrency => config.global.download.concurrency.to_string(),
+            Self::GlobalDownloadResume => config.global.download.resume.to_string(),
+            Self::GlobalDownloadOnConflict => config.global.download.on_conflict.to_string(),
             Self::BunkrToken => token_of(&config.bunkr),
             Self::BunkrFolderId => folder_id_of(&config.bunkr),
             Self::GofileToken => token_of(&config.gofile),
             Self::GofileFolderId => folder_id_of(&config.gofile),
             Self::GofileServer => server_of(&config.gofile),
+            Self::GofileLinkPassword => text_of(&config.gofile, |c| c.link_password.as_deref()),
             Self::FilesterToken => token_of(&config.filester),
             Self::FilesterFolderId => folder_id_of(&config.filester),
+            Self::FilesterLinkPassword => text_of(&config.filester, |c| c.link_password.as_deref()),
             Self::PixeldrainToken => token_of(&config.pixeldrain),
             Self::PixeldrainFolderId => folder_id_of(&config.pixeldrain),
+            Self::GoonboxToken => token_of(&config.goonbox),
             Self::GoonboxUsername => text_of(&config.goonbox, |c| c.username.as_deref()),
             Self::GoonboxPassword => text_of(&config.goonbox, |c| c.password.as_deref()),
             Self::GoonboxFolderId => folder_id_of(&config.goonbox),
@@ -111,15 +154,56 @@ impl ConfigKey {
                     .map(str::to_string)
                     .collect();
             }
+            Self::GlobalDisabledDownloaders => {
+                config.global.disabled_downloaders = value
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+                    .collect();
+            }
+            Self::GlobalDownloadOutputDir => {
+                config.global.download.output_dir = opt(value).map(PathBuf::from);
+            }
+            Self::GlobalDownloadConcurrency => {
+                let concurrency = value.parse::<usize>().map_err(|_| {
+                    ConfigError::InvalidValue(format!(
+                        "invalid concurrency '{}': expected a positive integer",
+                        value
+                    ))
+                })?;
+                if concurrency == 0 {
+                    return Err(ConfigError::InvalidValue(
+                        "concurrency must be at least 1".to_string(),
+                    ));
+                }
+                config.global.download.concurrency = concurrency;
+            }
+            Self::GlobalDownloadResume => {
+                config.global.download.resume = value.parse::<bool>().map_err(|_| {
+                    ConfigError::InvalidValue(format!(
+                        "invalid resume value '{}': expected true or false",
+                        value
+                    ))
+                })?;
+            }
+            Self::GlobalDownloadOnConflict => {
+                config.global.download.on_conflict = value
+                    .parse::<ConflictPolicy>()
+                    .map_err(ConfigError::InvalidValue)?;
+            }
             Self::BunkrToken => endpoint(&mut config.bunkr).token = opt(value),
             Self::BunkrFolderId => endpoint(&mut config.bunkr).folder_id = opt(value),
             Self::GofileToken => endpoint(&mut config.gofile).token = opt(value),
             Self::GofileFolderId => endpoint(&mut config.gofile).folder_id = opt(value),
             Self::GofileServer => endpoint(&mut config.gofile).server = opt(value),
+            Self::GofileLinkPassword => endpoint(&mut config.gofile).link_password = opt(value),
             Self::FilesterToken => endpoint(&mut config.filester).token = opt(value),
             Self::FilesterFolderId => endpoint(&mut config.filester).folder_id = opt(value),
+            Self::FilesterLinkPassword => endpoint(&mut config.filester).link_password = opt(value),
             Self::PixeldrainToken => endpoint(&mut config.pixeldrain).token = opt(value),
             Self::PixeldrainFolderId => endpoint(&mut config.pixeldrain).folder_id = opt(value),
+            Self::GoonboxToken => endpoint(&mut config.goonbox).token = opt(value),
             Self::GoonboxUsername => endpoint(&mut config.goonbox).username = opt(value),
             Self::GoonboxPassword => endpoint(&mut config.goonbox).password = opt(value),
             Self::GoonboxFolderId => endpoint(&mut config.goonbox).folder_id = opt(value),

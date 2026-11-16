@@ -1,23 +1,29 @@
 # upio
 
-Upload files to multiple hosting services from the command line or your own
-Rust code, with optional preprocessing (splitting, compression, renaming) so
-files fit the target service's limits. A desktop GUI is also included.
+Upload and download files from multiple hosting services in your own Rust code,
+with optional preprocessing (splitting, compression, renaming) so files fit the
+target service's limits. Uploading is also available from the command line, and
+a desktop GUI is included.
 
 Currently supported services:
 
 <!-- BEGIN generated: services -->
-| Service     | Crate                 | Auth Required | Folder / album | Capabilities |
-| ----------- | --------------------- | ------------- | -------------- | ------------ |
-| Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | All          |
-| GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | All          |
-| Fileditch   | `uploader-fileditch`  | No            | No             | All          |
-| Filester.me | `uploader-filester`   | Optional\*    | Yes            | All          |
-| GoonBox     | `uploader-goonbox`    | Yes           | Yes            | Image        |
-| Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | All          |
+
+| Service     | Crate                 | Auth Required | Folder / album | Download | Capabilities |
+| ----------- | --------------------- | ------------- | -------------- | -------- | ------------ |
+| Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | Yes      | All          |
+| GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | Yes      | All          |
+| Fileditch   | `uploader-fileditch`  | No            | No             | Yes      | All          |
+| Filester.me | `uploader-filester`   | Optional\*    | Yes            | Yes      | All          |
+| GoonBox     | `uploader-goonbox`    | Yes           | Yes            | Yes      | Image        |
+| Pixeldrain  | `uploader-pixeldrain` | Yes           | Yes            | Yes      | All          |
 
 \* Optional. Anonymous uploads work without auth, however some functionality may be locked behind it.
+
 <!-- END generated: services -->
+
+Downloads are opt-in. The Download column shows support when the `download`
+feature is enabled.
 
 ## Quick start
 
@@ -43,7 +49,7 @@ upio upload -u bunkr video.mp4
 
 ## Command line
 
-The CLI has four subcommands. Running `upio <file>...` with no subcommand
+The CLI has five subcommands. Running `upio <file>...` with no subcommand
 also uploads.
 
 ### `upload`
@@ -93,6 +99,30 @@ A successful upload that the service answers without a usable URL counts as
 failed; the pipeline never reports success with no URL. If preprocessing
 created temporary files and cleanup fails after the upload, the URLs are kept
 but the row still reports the cleanup error.
+
+### `download`
+
+Download files from a share URL. Credentials come from the matching service
+config, so private content works without extra flags.
+
+```sh
+upio download 'https://filester.me/f/<id>'
+upio download -o downloads 'https://pixeldrain.com/u/<id>'
+upio download --dry-run 'https://gofile.io/d/<id>'
+```
+
+| Flag                | Description                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `-o, --output`      | Output directory. Defaults to `global.download.output_dir`, then the current directory.    |
+| `-c, --concurrency` | Maximum concurrent files. Defaults to `global.download.concurrency`.                       |
+| `--no-resume`       | Start partial files over instead of resuming them.                                        |
+| `--on-conflict`     | `rename`, `skip`, or `overwrite`. Defaults to `global.download.on_conflict`.               |
+| `-p, --password`    | Password for protected links without `?password=`.                                         |
+| `--flat`            | Put files directly in the output directory instead of preserving remote folder names.      |
+| `--dry-run`         | Print the planned destinations without writing files.                                      |
+
+`-p` and `<service>.link_password` supply protected-link passwords; a
+`?password=` on the URL wins.
 
 ### `config`
 
@@ -149,6 +179,13 @@ variables take precedence over the config file.
 ```toml
 [global]
 disabled_uploaders = []
+disabled_downloaders = []
+
+[global.download]
+output_dir = "…"       # optional; defaults to the current directory
+concurrency = 4
+resume = true
+on_conflict = "rename" # rename | skip | overwrite
 
 [bunkr]
 token = "…"
@@ -158,16 +195,19 @@ folder_id = "…"
 token = "…" # optional; anonymous uploads work without it
 folder_id = "…"
 server = "store4" # optional; auto-selected when unset
+link_password = "…" # optional; unlocks password-protected folders
 
 [fileditch]
 
 [filester]
 token = "…"
 folder_id = "…"
+link_password = "…" # optional; unlocks password-protected folders
 
 [goonbox]
-username = "…" # required; no token exists for this service
-password = "…" # required; masked in output like a token
+token = "…" # optional; read-only API key for link-only downloads
+username = "…" # required for uploads
+password = "…" # required for uploads; masked in output like a token
 folder_id = "…" # an album's encoded_id
 
 [pixeldrain]
@@ -177,8 +217,9 @@ folder_id = "…" # a list's id
 # Per-service preprocessing lives under e.g. [bunkr.preprocess]; see below.
 ```
 
-Unknown keys in `disabled_uploaders` are inert; only exact canonical service
-names disable anything.
+Unknown keys in `disabled_uploaders` or `disabled_downloaders` are inert; only
+exact canonical service names disable anything. The two lists are independent,
+so a service can be enabled for one direction and disabled for the other.
 
 ## Preprocessing
 
@@ -230,12 +271,14 @@ the upload's URLs are preserved but the result reports the cleanup error.
 Strategies run in this canonical chain order:
 
 <!-- BEGIN generated: strategies -->
+
 | #   | Strategy         | Trigger      | What it does                                                                                                                    | Requirements               |
 | --- | ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | 1   | `normalize_name` | Always       | Sanitize the file name (spaces, unicode, invalid characters); length-capped, Unicode-safe. The original file is never modified. | None (pure Rust)           |
 | 2   | `compress_image` | If oversized | Re-encode and/or resize images; outputs jpeg or png.                                                                            | None (pure Rust)           |
 | 3   | `wrap_zip`       | Always       | Wrap the file in a compressed zip (useful for text and log files). Skips images and videos.                                     | None (pure Rust)           |
 | 4   | `split_video`    | If oversized | Split a video into independently playable segments via ffmpeg and ffprobe.                                                      | ffmpeg + ffprobe on `PATH` |
+
 <!-- END generated: strategies -->
 
 When a strategy needs an external tool that is missing, the rule is skipped
@@ -247,6 +290,7 @@ available.
 Use the `upio` crate to upload from your own Rust program. The crate re-exports
 every service; feature flags control which ones are compiled in
 (`default = ["bunkr", "gofile", "fileditch", "filester", "goonbox", "pixeldrain"]`).
+Downloads are behind the opt-in `download` feature, which is off by default.
 
 ```toml
 [dependencies]
@@ -296,11 +340,11 @@ Constructors are synchronous. Network setup happens in `init()`:
 - `FilesterUploader::new()` or `FilesterUploader::with_token(token)`, token optional.
 - `PixeldrainUploader::new()` or `PixeldrainUploader::with_token(token)`,
   token required; Pixeldrain rejects anonymous uploads.
-- `GoonboxUploader::new(username, password)`. No token: GoonBox has no
-  browser-free write API, so `init()` signs in and solves the site's
-  Cloudflare challenge with a real Chrome. On a headless Linux server,
-  install Xvfb (`apt install xvfb`); upio starts it automatically when
-  `DISPLAY` is unset.
+- `GoonboxUploader::new(username, password)`. Uploads use an account, not a
+  token: GoonBox has no browser-free write API, so `init()` signs in and
+  solves the site's Cloudflare challenge with a real Chrome. On a headless
+  Linux server, install Xvfb (`apt install xvfb`); upio starts it
+  automatically when `DISPLAY` is unset.
 
 Uploaders declare what they accept via `capabilities()` (video, image, audio,
 archives, arbitrary files) and their maximum file size via `max_file_size()`;
@@ -316,6 +360,53 @@ When you don't want to construct an uploader by hand, use the `upio::registry`
 module. It is the single source of truth for known uploaders: `UploaderId`
 enumerates them and `registry::build_uploader(id, config)` builds one from an
 endpoint config, the same path the CLI uses.
+
+Downloads use the `Downloader` trait. A service implements `resolve` to turn a
+share URL into a tree of files, and the shared engine handles naming,
+conflicts, resume, retries, and atomic completion. Enable `download` on the
+dependency to compile it:
+
+```rust
+use upio::download::{self, DownloadOptions, DirectDownloader, Downloader};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let downloader = DirectDownloader::new();
+    let node = downloader
+        .resolve("https://cdn.example.com/clip.mp4", &Default::default())
+        .await?;
+    let plan = download::plan(
+        &node,
+        &DownloadOptions {
+            output_dir: "videos".into(),
+            ..Default::default()
+        },
+    )?;
+
+    let results = download::download(&plan, &downloader, &Default::default(), 4, None).await;
+    for result in results {
+        println!("{} -> {:?} {:?}", result.source_url, result.destination, result.error);
+    }
+    Ok(())
+}
+```
+
+A service advertises download support by adding a `DownloadDef` to its
+`ServiceDef`. `UploaderId::from_url` dispatches a URL to the service that claims
+it, and `registry::build_downloader(id, config)` builds the downloader. A
+service without a descriptor is upload-only.
+
+Downloaders use the same `token` and account fields as uploaders.
+`GoonboxDownloader` also accepts an account with `with_account`; GoFile and
+Filester read protected-link passwords from `link_password` or `?password=`.
+
+Fileditch share pages gate their direct link behind a WebAssembly browser check.
+Its downloader runs a real Chrome to pass that check, reads the link the page
+assigns to its download button, and hands the public URL to the shared engine.
+Chrome must be installed. GoonBox and Fileditch share one profile at
+`<config-dir>/upio/chrome-profile`, so clearance cookies are paid for once.
+Chrome runs without a visible window: on Windows it starts on a separate
+desktop, and on headless Linux under Xvfb when it is available.
 
 ## GUI
 
@@ -339,16 +430,17 @@ controls are reachable by keyboard.
 
 | Crate                     | Purpose                                                                         |
 | ------------------------- | ------------------------------------------------------------------------------- |
-| `crates/core`             | Shared types, traits, error handling, HTTP helpers, and preprocessing.          |
+| `crates/core`             | Shared types, traits, errors, HTTP helpers, the download engine, and preprocessing. |
+| `crates/browser`          | Shared Chrome session, hidden desktop/Xvfb, and the one Chrome profile.         |
 | `crates/uploader-*bunkr*` | Uploader implementations.                                                       |
-| `crates/upio`             | Unified library: feature flags, the upload pipeline, and the uploader registry. |
+| `crates/upio`             | Unified library: feature flags, the upload pipeline, and the service registry.  |
 | `crates/config`           | Config model, layered env/file reader, typed keys, and atomic writes.           |
 | `crates/cli`              | The `upio` command-line binary.                                                 |
 | `crates/gui`              | The `upio-gui` Dioxus desktop app.                                              |
 
-Versioning: `upio-core`, the per-service `uploader-*` crates, and the `upio`
-crate are released together from the workspace version. The `upio-config` and
-`upio-cli` crates are versioned independently.
+Versioning: `upio-core`, `upio-browser`, the per-service `uploader-*` crates, and
+the `upio` crate are released together from the workspace version. The
+`upio-config` and `upio-cli` crates are versioned independently.
 
 ## Development
 
@@ -365,10 +457,11 @@ The services and strategies tables above are generated from the code. After
 adding an uploader or preprocessing strategy, regenerate them:
 
 ```sh
-cargo run -p upio --example readme
+cargo run -p upio --example readme --all-features
 ```
 
-`cargo test -p upio` fails when the README and the code disagree.
+`cargo test -p upio --all-features` fails when the README and the code disagree.
+The generated table assumes every feature, including `download`, is enabled.
 
 Build an optimized binary (release profile is configured in the workspace root):
 

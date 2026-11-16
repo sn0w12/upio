@@ -12,6 +12,7 @@ pub enum ConfigError {
     TomlSer(TomlSerError),
     Figment(Box<FigmentError>),
     InvalidKey(String),
+    InvalidValue(String),
 }
 
 impl fmt::Display for ConfigError {
@@ -22,6 +23,7 @@ impl fmt::Display for ConfigError {
             ConfigError::TomlSer(e) => write!(f, "failed to serialize config: {}", e),
             ConfigError::Figment(e) => write!(f, "config error: {}", e),
             ConfigError::InvalidKey(key) => write!(f, "unknown config key: '{}'", key),
+            ConfigError::InvalidValue(message) => f.write_str(message),
         }
     }
 }
@@ -34,6 +36,7 @@ impl std::error::Error for ConfigError {
             ConfigError::TomlSer(e) => Some(e),
             ConfigError::Figment(e) => Some(e),
             ConfigError::InvalidKey(_) => None,
+            ConfigError::InvalidValue(_) => None,
         }
     }
 }

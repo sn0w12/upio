@@ -5,12 +5,15 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+download = ["upio-core/download"]
+
 [dependencies]
 upio-core = { workspace = true }
+upio-browser = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
-dirs = { workspace = true }
-futures = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

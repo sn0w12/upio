@@ -7,7 +7,7 @@ use upio_config::Settings;
 
 use crate::output;
 
-/// Run the `list` command: show uploaders and what they accept.
+/// Run the `list` command: show services and what they accept.
 pub fn run(config_path: Option<&Path>) -> Result<()> {
     let settings = Settings::load_from_or_default(config_path)?;
     let config = settings.extract()?;

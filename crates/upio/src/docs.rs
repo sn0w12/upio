@@ -86,6 +86,7 @@ pub fn services_table() -> String {
                 format!("`{}`", def.crate_name),
                 auth.to_string(),
                 yes_no(def.supports_folders),
+                yes_no(def.download.is_some()),
                 capabilities_label(id.capabilities()),
             ]
         })
@@ -97,6 +98,7 @@ pub fn services_table() -> String {
             "Crate",
             "Auth Required",
             "Folder / album",
+            "Download",
             "Capabilities",
         ],
         &rows,
@@ -150,7 +152,9 @@ fn replace_block(text: &str, block: &str, content: &str, eol: &str) -> Result<St
     synced.push_str(&text[..start]);
     synced.push_str(&begin);
     synced.push_str(eol);
+    synced.push_str(eol);
     synced.push_str(&content.replace('\n', eol));
+    synced.push_str(eol);
     synced.push_str(eol);
     synced.push_str(&end);
     synced.push_str(&text[body_end + end.len()..]);

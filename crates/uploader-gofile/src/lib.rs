@@ -4,10 +4,16 @@ use serde::Deserialize;
 use upio_core::error::UploadError;
 use upio_core::filesize::FileSize;
 use upio_core::http::{map_reqwest_error, parse_json_response, tracked_file_part};
-use upio_core::service::{BuildError, Credential, ServiceDef};
+use upio_core::service::{BuildError, Credential, DownloadDef, ServiceDef};
 use upio_core::types::{
     BoxedUploader, UploadResult, Uploader, UploaderCapabilities, UploaderEndpointConfig,
 };
+
+#[cfg(feature = "download")]
+mod download;
+
+#[cfg(feature = "download")]
+pub use download::GoFileDownloader;
 
 const SERVERS_URL: &str = "https://api.gofile.io/servers";
 const CONTENT_URL: &str = "https://api.gofile.io/contents";
@@ -373,6 +379,11 @@ impl Uploader for GoFileUploader {
     }
 }
 
+#[cfg(feature = "download")]
+const DOWNLOAD: Option<DownloadDef> = Some(download::GOFILE_DOWNLOAD);
+#[cfg(not(feature = "download"))]
+const DOWNLOAD: Option<DownloadDef> = None;
+
 pub static GOFILE_SERVICE: ServiceDef = ServiceDef {
     name: GoFileUploader::NAME,
     display_name: "GoFile.io",
@@ -382,6 +393,7 @@ pub static GOFILE_SERVICE: ServiceDef = ServiceDef {
     capabilities: GoFileUploader::CAPABILITIES,
     max_file_size: GoFileUploader::MAX_FILE_SIZE,
     build,
+    download: DOWNLOAD,
 };
 
 fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {

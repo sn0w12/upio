@@ -33,7 +33,10 @@ pub mod error;
 pub mod key;
 pub mod settings;
 
-pub use config::{is_uploader_enabled, write_atomic, Config, GlobalConfig};
+pub use config::{
+    is_downloader_enabled, is_uploader_enabled, write_atomic, Config, DownloadSettings,
+    GlobalConfig,
+};
 pub use error::ConfigError;
 pub use key::ConfigKey;
 pub use settings::Settings;

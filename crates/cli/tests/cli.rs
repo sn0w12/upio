@@ -25,6 +25,34 @@ fn upload_without_paths_fails() {
 }
 
 #[test]
+fn download_help() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args(["download", "--help"]).assert().success();
+}
+
+#[test]
+fn download_without_urls_fails() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.arg("download").assert().failure();
+}
+
+#[test]
+fn download_unknown_url_fails() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args(["download", "https://example.test/file"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn download_zero_concurrency_fails() {
+    let mut cmd = Command::cargo_bin("upio-cli").unwrap();
+    cmd.args(["download", "-c", "0", "https://example.test/file"])
+        .assert()
+        .failure();
+}
+
+#[test]
 fn list_runs() {
     let mut cmd = Command::cargo_bin("upio-cli").unwrap();
     cmd.arg("list").assert().success();
