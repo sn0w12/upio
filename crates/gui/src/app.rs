@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use rune::{TextEdit, Tx};
 use serde::{Deserialize, Serialize};
 use upio::preprocess::tools::Tool;
-use upio::preprocess::{PreprocessRule, PreprocessStrategy};
+use upio::preprocess::{PreprocessConfig, PreprocessRule, PreprocessStrategy};
 use upio::registry::UploaderId;
 use upio_config::{Config, ConfigKey};
 
@@ -163,6 +163,7 @@ pub struct App {
     pub save_error: Option<String>,
     pub load_error: Option<String>,
     pub settings_service: UploaderId,
+    pub settings_global: bool,
 
     pub queue: Vec<QueueItem>,
     next_id: u64,
@@ -229,6 +230,7 @@ impl App {
             save_error: None,
             load_error,
             settings_service,
+            settings_global: false,
             queue: Vec::new(),
             next_id: 1,
             services,
@@ -306,6 +308,32 @@ impl App {
 
     pub fn service_active(&self, id: UploaderId) -> bool {
         self.service_enabled(id) && self.service_ready(id)
+    }
+
+    pub fn downloader_enabled(&self, id: UploaderId) -> bool {
+        upio_config::is_downloader_enabled(&self.config.global.disabled_downloaders, id.name())
+    }
+
+    pub fn set_downloader_enabled(&mut self, id: UploaderId, enabled: bool) {
+        let mut disabled = self.config.global.disabled_downloaders.clone();
+        let name = id.name().to_string();
+        if enabled {
+            disabled.retain(|entry| entry != &name);
+        } else if !disabled.contains(&name) {
+            disabled.push(name);
+        }
+        disabled.retain(|entry| {
+            UploaderId::ALL
+                .iter()
+                .any(|known| known.name() == entry.as_str())
+        });
+        let ordered: Vec<String> = UploaderId::ALL
+            .iter()
+            .map(|known| known.name().to_string())
+            .filter(|name| disabled.contains(name))
+            .collect();
+        self.config.global.disabled_downloaders = ordered;
+        self.dirty = true;
     }
 
     pub fn selected(&self, id: UploaderId) -> bool {
@@ -603,30 +631,23 @@ impl App {
     }
 
     pub fn toggle_preprocess(&mut self, id: UploaderId, strategy: PreprocessStrategy, on: bool) {
-        let preprocess = &mut endpoint_mut(&mut self.config, id).preprocess;
-        if on {
-            if !preprocess
-                .rules
-                .iter()
-                .any(|rule| rule.strategy == strategy)
-            {
-                preprocess.rules.push(PreprocessRule::new(strategy));
-            }
-        } else {
-            preprocess.rules.retain(|rule| rule.strategy != strategy);
-        }
+        let Some(preprocess) = self.config.preprocess_mut(id.name()) else {
+            return;
+        };
+        set_strategy(preprocess, strategy, on);
         self.dirty = true;
     }
 
     pub fn preprocess_enabled(&mut self, id: UploaderId, enabled: bool) {
-        endpoint_mut(&mut self.config, id).preprocess.enabled = enabled;
+        if let Some(preprocess) = self.config.preprocess_mut(id.name()) {
+            preprocess.enabled = enabled;
+        }
         self.dirty = true;
     }
 
     pub fn preprocess_has(&self, id: UploaderId, strategy: PreprocessStrategy) -> bool {
         self.config
-            .get_uploader_config(id.name())
-            .preprocess
+            .preprocess_for(id.name())
             .rules
             .iter()
             .any(|rule| rule.strategy == strategy)
@@ -635,6 +656,45 @@ impl App {
     pub fn toggle_preprocess_strategy(&mut self, id: UploaderId, strategy: PreprocessStrategy) {
         let on = !self.preprocess_has(id, strategy);
         self.toggle_preprocess(id, strategy, on);
+    }
+
+    pub fn preprocess_is_overridden(&self, id: UploaderId) -> bool {
+        self.config.preprocess_override(id.name()).is_some()
+    }
+
+    pub fn clear_preprocess_override(&mut self, id: UploaderId) {
+        if self.config.clear_preprocess_override(id.name()) {
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_preprocess_override(&mut self, id: UploaderId, overridden: bool) {
+        if overridden {
+            if self.config.preprocess_mut(id.name()).is_some() {
+                self.dirty = true;
+            }
+        } else {
+            self.clear_preprocess_override(id);
+        }
+    }
+
+    pub fn set_global_preprocess_enabled(&mut self, enabled: bool) {
+        self.config.preprocess.enabled = enabled;
+        self.dirty = true;
+    }
+
+    pub fn global_preprocess_has(&self, strategy: PreprocessStrategy) -> bool {
+        self.config
+            .preprocess
+            .rules
+            .iter()
+            .any(|rule| rule.strategy == strategy)
+    }
+
+    pub fn toggle_global_preprocess_strategy(&mut self, strategy: PreprocessStrategy) {
+        let on = !self.global_preprocess_has(strategy);
+        set_strategy(&mut self.config.preprocess, strategy, on);
+        self.dirty = true;
     }
 
     pub fn commit_field(&mut self, key: ConfigKey) {
@@ -652,6 +712,23 @@ impl App {
         let active = self.active_services();
         self.services.retain(|id| active.contains(id));
         self.sync_pending_outcomes();
+    }
+
+    /// Set a config key from a control that is not a text field, keeping the
+    /// text editors in sync.
+    pub fn set_config_value(&mut self, key: ConfigKey, value: &str) {
+        match self.config.set_value(&key, value) {
+            Ok(()) => {
+                if let Some(edit) = self.edits.get_mut(&key) {
+                    edit.replace_text(self.config.get_value(&key));
+                }
+                self.dirty = true;
+                self.save_error = None;
+            }
+            Err(error) => {
+                self.save_error = Some(error.to_string());
+            }
+        }
     }
 
     pub fn save_config(&mut self) {
@@ -765,6 +842,20 @@ fn outcome_mut(
         .find(|outcome| outcome.service == service)
 }
 
+fn set_strategy(preprocess: &mut PreprocessConfig, strategy: PreprocessStrategy, on: bool) {
+    if on {
+        if !preprocess
+            .rules
+            .iter()
+            .any(|rule| rule.strategy == strategy)
+        {
+            preprocess.rules.push(PreprocessRule::new(strategy));
+        }
+    } else {
+        preprocess.rules.retain(|rule| rule.strategy != strategy);
+    }
+}
+
 pub fn enabled_services(config: &Config) -> Vec<UploaderId> {
     UploaderId::ALL
         .iter()
@@ -795,19 +886,6 @@ pub fn missing_credential(config: &Config, id: UploaderId) -> Option<&'static st
         "goonbox" if empty(ConfigKey::GoonboxPassword) => Some("password"),
         _ => None,
     }
-}
-
-pub fn endpoint_mut(config: &mut Config, id: UploaderId) -> &mut upio::UploaderEndpointConfig {
-    let section = match id.name() {
-        "bunkr" => &mut config.bunkr,
-        "gofile" => &mut config.gofile,
-        "fileditch" => &mut config.fileditch,
-        "filester" => &mut config.filester,
-        "goonbox" => &mut config.goonbox,
-        "pixeldrain" => &mut config.pixeldrain,
-        other => unreachable!("no config section for '{other}'"),
-    };
-    section.get_or_insert_with(Default::default)
 }
 
 pub fn poll(app: &mut App, _clock: f64, _tx: &mut Tx) -> bool {

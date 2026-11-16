@@ -38,9 +38,11 @@ pub struct UploaderEndpointConfig {
     /// Specific server to use (service-dependent); auto-selected when unset.
     pub server: Option<String>,
     /// Preprocessing rules applied to files before they are uploaded through
-    /// this endpoint. See [`crate::preprocess`].
-    #[serde(default)]
-    pub preprocess: PreprocessConfig,
+    /// this endpoint. `None` disables preprocessing here; config files leave
+    /// the field unset to inherit the global rules. See
+    /// [`crate::preprocess`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preprocess: Option<PreprocessConfig>,
 }
 
 /// Describes which kinds of files an uploader accepts.

@@ -3,11 +3,11 @@ use std::path::Path;
 use rune::{col, el, row, text, El, ScrollSpec, TextStyle};
 use rune_kit::{
     Badge, BadgeVariant, Button, ButtonVariant, ControlSize, IconButton, IconButtonVariant, Kit,
-    ScrollBar, ScrollBarStyle, Switch, TextArea, TextInput,
+    ScrollBar, ScrollBarStyle, Select, SelectAppearance, Switch, TextArea, TextInput,
 };
 use upio::filesize::FileSize;
 use upio::preprocess::tools::Tool;
-use upio::preprocess::STRATEGIES;
+use upio::preprocess::{PreprocessStrategy, STRATEGIES};
 use upio::registry::UploaderId;
 use upio_config::{Config, ConfigKey};
 
@@ -116,7 +116,7 @@ fn fields(id: UploaderId) -> &'static [FieldSpec] {
     }
 }
 
-pub fn view(s: &App, k: &Kit) -> El {
+pub fn view(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut page = col()
         .key("settings-page")
         .grow(1.0)
@@ -168,7 +168,7 @@ pub fn view(s: &App, k: &Kit) -> El {
 
     let content = match s.settings_section {
         SettingsSection::Appearance => appearance(s, k),
-        SettingsSection::Services => services(s, k),
+        SettingsSection::Services => services(s, k, layer),
         SettingsSection::Tools => tools(s, k),
         SettingsSection::Advanced => advanced(s, k),
     };
@@ -384,10 +384,31 @@ fn settings_nav(s: &App, k: &Kit) -> El {
     nav
 }
 
-fn services(s: &App, k: &Kit) -> El {
+fn services(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut list = col().key("service-list").w(170.0).gap(1.0).sticky_top(0.0);
+
+    let global_selected = s.settings_global;
+    list = list.child(
+        tab_row(k, "service-global".to_string(), "Global", global_selected)
+            .on_press(|s: &mut App| s.settings_global = true)
+            .child(
+                text("Global")
+                    .font(if global_selected {
+                        k.ty.ui_medium
+                    } else {
+                        k.ty.ui
+                    })
+                    .color(if global_selected {
+                        k.c.text_base
+                    } else {
+                        k.c.text_muted
+                    })
+                    .grow(1.0),
+            ),
+    );
+
     for id in UploaderId::ALL {
-        let selected = s.settings_service == *id;
+        let selected = !s.settings_global && s.settings_service == *id;
         let enabled = s.service_enabled(*id);
         let ready = s.service_ready(*id);
         let status = if !ready {
@@ -404,7 +425,10 @@ fn services(s: &App, k: &Kit) -> El {
                 id.def().display_name,
                 selected,
             )
-            .on_press(move |s: &mut App| s.settings_service = *id)
+            .on_press(move |s: &mut App| {
+                s.settings_global = false;
+                s.settings_service = *id;
+            })
             .child(
                 text(id.def().display_name)
                     .font(if selected { k.ty.ui_medium } else { k.ty.ui })
@@ -425,14 +449,248 @@ fn services(s: &App, k: &Kit) -> El {
         .gap(12.0)
         .items_start()
         .child(list)
-        .child(service_detail(s, k))
+        .child(if s.settings_global {
+            global_detail(s, k, layer)
+        } else {
+            service_detail(s, k, layer)
+        })
+}
+
+fn global_detail(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
+    col()
+        .key("global-detail")
+        .grow(1.0)
+        .min_w(0.0)
+        .gap(16.0)
+        .child(page_heading(
+            k,
+            "Global",
+            "Settings that apply to every service.",
+        ))
+        .child(section(
+            k,
+            "Services",
+            "Choose which services accept uploads and downloads.",
+            rows(global_service_rows(s, k)),
+        ))
+        .child(section(
+            k,
+            "Downloads",
+            "Defaults used by downloading commands.",
+            rows(download_rows(s, k, layer)),
+        ))
+        .child(section(
+            k,
+            "Preprocessing",
+            "These rules apply to services that do not define their own.",
+            rows(global_preprocess_rows(s, k)),
+        ))
+}
+
+fn global_service_rows(s: &App, k: &Kit) -> Vec<El> {
+    let mut items = Vec::new();
+    for &id in UploaderId::ALL {
+        let ready = s.service_ready(id);
+        let control = row()
+            .gap(14.0)
+            .center_y()
+            .child(
+                Switch::new(s.service_active(id))
+                    .label("Uploads")
+                    .disabled(!ready)
+                    .on_toggle(move |s: &mut App| {
+                        let next = !s.service_active(id);
+                        s.set_enabled(id, next);
+                    })
+                    .build(k),
+            )
+            .child(
+                Switch::new(s.downloader_enabled(id))
+                    .label("Downloads")
+                    .disabled(!id.supports_download())
+                    .on_toggle(move |s: &mut App| {
+                        let next = !s.downloader_enabled(id);
+                        s.set_downloader_enabled(id, next);
+                    })
+                    .build(k),
+            );
+        items.push(setting_row(
+            k,
+            id.def().display_name,
+            if ready {
+                ""
+            } else {
+                "Add credentials before enabling uploads."
+            },
+            control,
+        ));
+    }
+    items
+}
+
+fn download_rows(s: &App, k: &Kit, layer: &mut Vec<El>) -> Vec<El> {
+    vec![
+        text_setting(
+            s,
+            k,
+            ConfigKey::GlobalDownloadOutputDir,
+            "Output folder",
+            "Current directory",
+            "Where downloaded files are written. Empty uses the current directory.",
+        ),
+        download_concurrency(s, k, layer),
+        setting_row(
+            k,
+            "Resume partial downloads",
+            "Continue incomplete files instead of starting over.",
+            Switch::new(s.config.global.download.resume)
+                .label("Resume partial downloads")
+                .hide_label()
+                .on_toggle(|s: &mut App| {
+                    let next = !s.config.global.download.resume;
+                    s.set_config_value(
+                        ConfigKey::GlobalDownloadResume,
+                        if next { "true" } else { "false" },
+                    );
+                })
+                .build(k),
+        ),
+        download_conflict(s, k, layer),
+    ]
+}
+
+fn download_concurrency(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
+    let current = s.config.global.download.concurrency.to_string();
+    let mut options = ["1", "2", "4", "8"]
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if !options.contains(&current) {
+        options.push(current.clone());
+        options.sort_by_key(|value| value.parse::<usize>().unwrap_or(0));
+    }
+    let select = Select::new("download-concurrency", &options)
+        .appearance(SelectAppearance::Field)
+        .width(130.0)
+        .label("Concurrency")
+        .current(Some(current.as_str()))
+        .open(s.is_open("download-concurrency"))
+        .on_toggle(|s: &mut App| s.toggle_open("download-concurrency"))
+        .on_close(|s: &mut App| s.close_open())
+        .on_choose(|s: &mut App, value, _| {
+            s.set_config_value(ConfigKey::GlobalDownloadConcurrency, value);
+            s.close_open();
+        })
+        .disabled(s.load_error.is_some())
+        .build(k, layer);
+    setting_row(
+        k,
+        "Concurrency",
+        "How many files download at the same time.",
+        select,
+    )
+}
+
+fn download_conflict(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
+    let value = s.config.get_value(&ConfigKey::GlobalDownloadOnConflict);
+    let current = match value.as_str() {
+        "skip" => "Skip",
+        "overwrite" => "Overwrite",
+        _ => "Rename",
+    };
+    let select = Select::new("download-conflict", &["Rename", "Skip", "Overwrite"])
+        .appearance(SelectAppearance::Field)
+        .width(130.0)
+        .label("When a file exists")
+        .current(Some(current))
+        .open(s.is_open("download-conflict"))
+        .on_toggle(|s: &mut App| s.toggle_open("download-conflict"))
+        .on_close(|s: &mut App| s.close_open())
+        .on_choose(|s: &mut App, choice, _| {
+            let value = match choice {
+                "Skip" => "skip",
+                "Overwrite" => "overwrite",
+                _ => "rename",
+            };
+            s.set_config_value(ConfigKey::GlobalDownloadOnConflict, value);
+            s.close_open();
+        })
+        .disabled(s.load_error.is_some())
+        .build(k, layer);
+    setting_row(
+        k,
+        "When a file exists",
+        "What to do when the destination file is already there.",
+        select,
+    )
+}
+
+fn text_setting(
+    s: &App,
+    k: &Kit,
+    key: ConfigKey,
+    label: &'static str,
+    placeholder: &'static str,
+    help: &'static str,
+) -> El {
+    let edit = s.edits.get(&key).expect("every config key has an editor");
+    row()
+        .w_full()
+        .gap(16.0)
+        .items_start()
+        .py(10.0)
+        .child(setting_label(k, label, help).grow(1.0).min_w(0.0))
+        .child(
+            TextInput::new(edit)
+                .label(label)
+                .placeholder(placeholder)
+                .width(None)
+                .disabled(s.load_error.is_some())
+                .on_edit(move |s: &mut App| {
+                    s.edits
+                        .get_mut(&key)
+                        .expect("every config key has an editor")
+                })
+                .on_change(move |s: &mut App, _| s.commit_field(key))
+                .build(k)
+                .w(280.0)
+                .key(format!("input-{label}")),
+        )
+        .key(format!("field-{label}"))
+}
+
+fn global_preprocess_rows(s: &App, k: &Kit) -> Vec<El> {
+    let mut items = vec![setting_row(
+        k,
+        "Enabled",
+        "Run the selected strategies on files sent to services that inherit these rules.",
+        Switch::new(s.config.preprocess.enabled)
+            .label("Enable global preprocessing")
+            .hide_label()
+            .disabled(s.load_error.is_some())
+            .on_toggle(|s: &mut App| {
+                let enabled = !s.config.preprocess.enabled;
+                s.set_global_preprocess_enabled(enabled);
+            })
+            .build(k),
+    )];
+    for strategy in STRATEGIES.iter().copied() {
+        items.push(strategy_row(
+            k,
+            strategy,
+            s.global_preprocess_has(strategy),
+            s.load_error.is_some(),
+            move |s: &mut App| s.toggle_global_preprocess_strategy(strategy),
+        ));
+    }
+    items
 }
 
 fn hairline(k: &Kit) -> El {
     el().w_full().h(1.0).fill(k.c.border_muted).a11y_hidden()
 }
 
-fn service_detail(s: &App, k: &Kit) -> El {
+fn service_detail(s: &App, k: &Kit, layer: &mut Vec<El>) -> El {
     let id = s.settings_service;
     let enabled = s.service_enabled(id);
     let ready = s.service_ready(id);
@@ -498,7 +756,7 @@ fn service_detail(s: &App, k: &Kit) -> El {
             "Credentials for this service. They are stored in config.toml.",
             authentication,
         ))
-        .child(preprocessing(s, k, id))
+        .child(preprocessing(s, k, id, layer))
 }
 
 fn field(s: &App, k: &Kit, spec: &'static FieldSpec) -> El {
@@ -544,46 +802,91 @@ fn field(s: &App, k: &Kit, spec: &'static FieldSpec) -> El {
         .key(format!("field-{}", spec.label))
 }
 
-fn preprocessing(s: &App, k: &Kit, id: UploaderId) -> El {
-    let preprocess = s.config.get_uploader_config(id.name()).preprocess;
-
-    let mut items = vec![setting_row(
+fn strategy_row(
+    k: &Kit,
+    strategy: PreprocessStrategy,
+    has: bool,
+    disabled: bool,
+    on_toggle: impl Fn(&mut App) + 'static,
+) -> El {
+    let def = strategy.def();
+    setting_row(
         k,
-        "Enabled",
-        "Run the selected strategies on every file sent to this service.",
-        Switch::new(preprocess.enabled)
-            .label("Enable preprocessing")
+        def.name,
+        def.description,
+        Switch::new(has)
+            .label(def.name)
             .hide_label()
-            .on_toggle(move |s: &mut App| {
-                let enabled = !s.config.get_uploader_config(id.name()).preprocess.enabled;
-                s.preprocess_enabled(id, enabled);
-            })
+            .disabled(disabled)
+            .on_toggle(on_toggle)
             .build(k),
-    )];
+    )
+    .key(format!("strategy-{}", def.id))
+}
+
+fn preprocessing(s: &App, k: &Kit, id: UploaderId, layer: &mut Vec<El>) -> El {
+    let preprocess = s.config.preprocess_for(id.name());
+    let overridden = s.preprocess_is_overridden(id);
+
+    let source = Select::new("preprocess-source", &["Global", "Custom"])
+        .appearance(SelectAppearance::Field)
+        .width(160.0)
+        .label("Rule source")
+        .current(Some(if overridden { "Custom" } else { "Global" }))
+        .open(s.is_open("preprocess-source"))
+        .on_toggle(|s: &mut App| s.toggle_open("preprocess-source"))
+        .on_close(|s: &mut App| s.close_open())
+        .on_choose(move |s: &mut App, value, _| {
+            s.set_preprocess_override(id, value == "Custom");
+            s.close_open();
+        })
+        .disabled(s.load_error.is_some())
+        .build(k, layer);
+
+    let mut items = vec![
+        setting_row(
+            k,
+            "Rule source",
+            if overridden {
+                "This service has its own rules. Changes here do not affect other services."
+            } else {
+                "This service uses the global rules. Choose Custom to edit them for this service."
+            },
+            source,
+        ),
+        setting_row(
+            k,
+            "Enabled",
+            "Run the selected strategies on every file sent to this service.",
+            Switch::new(preprocess.enabled)
+                .label("Enable preprocessing")
+                .hide_label()
+                .disabled(!overridden)
+                .on_toggle(move |s: &mut App| {
+                    let enabled = !s.config.preprocess_for(id.name()).enabled;
+                    s.preprocess_enabled(id, enabled);
+                })
+                .build(k),
+        ),
+    ];
     for strategy in STRATEGIES.iter().copied() {
-        let def = strategy.def();
-        let has = s.preprocess_has(id, strategy);
-        items.push(
-            setting_row(
-                k,
-                def.name,
-                def.description,
-                Switch::new(has)
-                    .label(def.name)
-                    .hide_label()
-                    .on_toggle(move |s: &mut App| {
-                        s.toggle_preprocess_strategy(id, strategy);
-                    })
-                    .build(k),
-            )
-            .key(format!("strategy-{}", def.id)),
-        );
+        items.push(strategy_row(
+            k,
+            strategy,
+            s.preprocess_has(id, strategy),
+            !overridden,
+            move |s: &mut App| s.toggle_preprocess_strategy(id, strategy),
+        ));
     }
 
     section(
         k,
         "Preprocessing",
-        "Prepare files before upload. Strategies use their default parameters; edit them in Advanced.",
+        if overridden {
+            "This service overrides the global preprocessing rules."
+        } else {
+            "This service inherits the global preprocessing rules."
+        },
         rows(items),
     )
 }

@@ -2,7 +2,9 @@
 //!
 //! This is the main entry point most consumers should use.
 //! Preprocessing rules are read from [`UploaderEndpointConfig::preprocess`]
-//! rather than being a hard-coded video-only flag.
+//! rather than being a hard-coded video-only flag. A `None` or disabled
+//! configuration uploads the source file untouched; config-file consumers get
+//! the resolved rules from `Config::endpoint_for`.
 //!
 //! # Example
 //!
@@ -85,9 +87,11 @@ pub async fn upload_file_with_progress(
         };
     }
 
-    let preprocess_config = &config.preprocess;
-
-    if !preprocess_config.enabled {
+    let Some(preprocess_config) = config
+        .preprocess
+        .as_ref()
+        .filter(|preprocess| preprocess.enabled)
+    else {
         return match uploader
             .upload_file_with_progress(file, config, progress)
             .await
@@ -108,7 +112,7 @@ pub async fn upload_file_with_progress(
                 error: Some(e.to_string()),
             },
         };
-    }
+    };
 
     match preprocess::preprocess_file(file, uploader.max_file_size().as_bytes(), preprocess_config)
         .await

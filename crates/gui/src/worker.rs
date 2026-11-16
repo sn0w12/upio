@@ -161,7 +161,7 @@ async fn run_upload(
                 let handle_for_start = handle.clone();
                 handle_for_start.update(move |app, _| app.service_started(item, service));
 
-                let mut endpoint = config.get_uploader_config(service.name());
+                let mut endpoint = config.endpoint_for(service.name());
                 let uploader = match registry::build_uploader(service, &endpoint) {
                     Ok(uploader) => uploader,
                     Err(error) => {

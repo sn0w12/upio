@@ -142,10 +142,10 @@ upio config set global.disabled_uploaders "filester"
 ```
 
 `config get` prints the grouped summary when stdout is a terminal and raw TOML
-otherwise, so scripts and pipes keep working. The summary also lists each
-service's preprocessing state and rules. Setting a value to `none` clears it.
-Secret values are masked by default, including in the TOML output; pass
-`--show-secrets` to print them in full. Writes are atomic.
+otherwise, so scripts and pipes keep working. The summary also shows the global
+preprocessing rules and any per-service overrides. Setting a value to `none`
+clears it. Secret values are masked by default, including in the TOML output;
+pass `--show-secrets` to print them in full. Writes are atomic.
 
 ### `list`
 
@@ -188,6 +188,14 @@ concurrency = 4
 resume = true
 on_conflict = "rename" # rename | skip | overwrite
 
+# Default preprocessing for every service. A [service.preprocess] table
+# replaces this configuration for that service.
+[preprocess]
+enabled = false
+
+# [[preprocess.rules]]
+# strategy = "normalize_name"
+
 [bunkr]
 token = "."
 folder_id = "."
@@ -224,10 +232,11 @@ so a service can be enabled for one direction and disabled for the other.
 
 ## Preprocessing
 
-Rules are configured per service under `[service.preprocess]` and can normalize
-names, compress images, wrap files in zip, or split videos. See
-[docs/preprocessing.md](docs/preprocessing.md) for the rule format, strategy
-table, and tool requirements.
+Rules are configured globally under `[preprocess]` and can normalize names,
+compress images, wrap files in zip, or split videos. Add a
+`[service.preprocess]` table to replace the global configuration for one
+service. See [docs/preprocessing.md](docs/preprocessing.md) for the rule format,
+strategy table, and tool requirements.
 
 ## GUI
 

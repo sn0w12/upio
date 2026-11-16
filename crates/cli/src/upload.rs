@@ -103,7 +103,7 @@ async fn upload_one(
         return;
     };
 
-    let mut endpoint = config.get_uploader_config(id.name());
+    let mut endpoint = config.endpoint_for(id.name());
     if let Some(fid) = folder_id {
         endpoint.folder_id = Some(fid.clone());
     }

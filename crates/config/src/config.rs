@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use upio_core::download::ConflictPolicy;
-use upio_core::UploaderEndpointConfig;
+use upio_core::{PreprocessConfig, UploaderEndpointConfig};
 
 use crate::key::ConfigKey;
 use crate::ConfigError;
@@ -15,6 +15,10 @@ use crate::ConfigError;
 pub struct Config {
     #[serde(default)]
     pub global: GlobalConfig,
+    /// Default preprocessing rules for every service. A `[service.preprocess]`
+    /// table replaces this configuration for that service.
+    #[serde(default, skip_serializing_if = "is_default_preprocess")]
+    pub preprocess: PreprocessConfig,
     #[serde(default)]
     pub bunkr: Option<UploaderEndpointConfig>,
     #[serde(default)]
@@ -70,6 +74,10 @@ fn default_download_concurrency() -> usize {
 
 fn default_true() -> bool {
     true
+}
+
+fn is_default_preprocess(config: &PreprocessConfig) -> bool {
+    !config.enabled && config.rules.is_empty()
 }
 
 /// Whether an uploader is enabled: exact, allocation-free comparison of its
@@ -150,6 +158,68 @@ impl Config {
             "pixeldrain" => self.pixeldrain.clone().unwrap_or_default(),
             _ => UploaderEndpointConfig::default(),
         }
+    }
+
+    /// The service's own `[service.preprocess]` table, when present.
+    pub fn preprocess_override(&self, name: &str) -> Option<&PreprocessConfig> {
+        match name {
+            "bunkr" => self.bunkr.as_ref(),
+            "gofile" => self.gofile.as_ref(),
+            "fileditch" => self.fileditch.as_ref(),
+            "filester" => self.filester.as_ref(),
+            "goonbox" => self.goonbox.as_ref(),
+            "pixeldrain" => self.pixeldrain.as_ref(),
+            _ => None,
+        }
+        .and_then(|endpoint| endpoint.preprocess.as_ref())
+    }
+
+    /// Effective preprocessing for a service: its override when set,
+    /// otherwise the global configuration.
+    pub fn preprocess_for(&self, name: &str) -> PreprocessConfig {
+        self.preprocess_override(name)
+            .cloned()
+            .unwrap_or_else(|| self.preprocess.clone())
+    }
+
+    /// The endpoint for a service with preprocessing resolved, ready for the
+    /// upload pipeline.
+    pub fn endpoint_for(&self, name: &str) -> UploaderEndpointConfig {
+        let mut endpoint = self.get_uploader_config(name);
+        endpoint.preprocess = Some(self.preprocess_for(name));
+        endpoint
+    }
+
+    /// Mutable preprocessing override for a service, seeded from the global
+    /// rules on first edit.
+    pub fn preprocess_mut(&mut self, name: &str) -> Option<&mut PreprocessConfig> {
+        let global = self.preprocess.clone();
+        let endpoint = match name {
+            "bunkr" => self.bunkr.get_or_insert_with(Default::default),
+            "gofile" => self.gofile.get_or_insert_with(Default::default),
+            "fileditch" => self.fileditch.get_or_insert_with(Default::default),
+            "filester" => self.filester.get_or_insert_with(Default::default),
+            "goonbox" => self.goonbox.get_or_insert_with(Default::default),
+            "pixeldrain" => self.pixeldrain.get_or_insert_with(Default::default),
+            _ => return None,
+        };
+        Some(endpoint.preprocess.get_or_insert(global))
+    }
+
+    /// Drop a service's preprocessing override, making it inherit the global
+    /// rules again. Returns whether an override was present.
+    pub fn clear_preprocess_override(&mut self, name: &str) -> bool {
+        match name {
+            "bunkr" => self.bunkr.as_mut(),
+            "gofile" => self.gofile.as_mut(),
+            "fileditch" => self.fileditch.as_mut(),
+            "filester" => self.filester.as_mut(),
+            "goonbox" => self.goonbox.as_mut(),
+            "pixeldrain" => self.pixeldrain.as_mut(),
+            _ => None,
+        }
+        .and_then(|endpoint| endpoint.preprocess.take())
+        .is_some()
     }
 
     /// Read a value by [`ConfigKey`].

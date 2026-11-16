@@ -21,7 +21,7 @@ pub fn view(s: &App, cx: &mut Cx<App>) -> El {
 
     let content = match s.page {
         Page::Upload => upload::view(s, &k, &mut layer),
-        Page::Settings => settings::view(s, &k),
+        Page::Settings => settings::view(s, &k, &mut layer),
     };
 
     let body = col()

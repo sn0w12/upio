@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Result};
 
+use upio::preprocess::PreprocessConfig;
 use upio::registry::UploaderId;
 use upio_config::{Config, ConfigKey};
 
@@ -123,7 +124,7 @@ fn summary_lines(config: &Config, path: &Path, show_secrets: bool, screen: Scree
     lines.push(String::new());
     lines.push(format!("  {}", style::rule(screen.width.saturating_sub(4))));
 
-    let mut footer = format!("{set} of {} keys set", ConfigKey::ALL.len());
+    let mut footer = format!("{set} of {} config keys set", ConfigKey::ALL.len());
     if !show_secrets
         && ConfigKey::ALL
             .iter()
@@ -139,6 +140,7 @@ fn preprocess_lines(config: &Config, screen: Screen) -> Vec<String> {
     let name_width = UploaderId::ALL
         .iter()
         .map(|id| style::visible_width(id.name()))
+        .chain(std::iter::once(style::visible_width("global")))
         .max()
         .unwrap_or(0);
     let strategy_width = 16;
@@ -148,47 +150,93 @@ fn preprocess_lines(config: &Config, screen: Screen) -> Vec<String> {
         format!("  {}", style::paint("preprocess", Tone::Strong)),
     ];
 
-    for id in UploaderId::ALL {
-        let preprocess = config.get_uploader_config(id.name()).preprocess;
-        let count = preprocess.rules.len();
-        let (state, tone) = match (preprocess.enabled, count) {
-            (false, 0) => ("disabled".to_string(), Tone::Muted),
-            (false, count) => (format!("disabled, {count} {}", plural(count)), Tone::Warn),
-            (true, 0) => ("enabled, no rules".to_string(), Tone::Warn),
-            (true, count) => (format!("enabled, {count} {}", plural(count)), Tone::Good),
-        };
-        let room = screen.width.saturating_sub(6 + name_width).max(1);
-        let state = style::truncate(&state, room);
-        lines.push(format!(
-            "    {}{}",
-            style::pad_right(&style::paint(id.name(), Tone::Plain), name_width + 2),
-            style::paint(state, tone)
-        ));
+    push_preprocess(
+        &mut lines,
+        "global",
+        &config.preprocess,
+        false,
+        name_width,
+        strategy_width,
+        screen,
+    );
 
-        let rule_tone = if preprocess.enabled {
-            Tone::Plain
-        } else {
-            Tone::Muted
-        };
-        for rule in &preprocess.rules {
-            let params = params_text(&rule.params);
-            let room = screen.width.saturating_sub(6 + strategy_width).max(1);
-            let params = style::truncate(&params, room);
-            let mut line = format!(
-                "      {}",
-                style::pad_right(
-                    &style::paint(rule.strategy.def().id, rule_tone),
-                    strategy_width
-                )
-            );
-            if !params.is_empty() {
-                line.push_str(&style::paint(params, Tone::Muted));
-            }
-            lines.push(line);
+    for id in UploaderId::ALL {
+        match config.preprocess_override(id.name()) {
+            Some(preprocess) => push_preprocess(
+                &mut lines,
+                id.name(),
+                preprocess,
+                true,
+                name_width,
+                strategy_width,
+                screen,
+            ),
+            None => lines.push(format!(
+                "    {}{}",
+                style::pad_right(&style::paint(id.name(), Tone::Muted), name_width + 2),
+                style::paint("inherits global", Tone::Muted)
+            )),
         }
     }
 
     lines
+}
+
+#[allow(clippy::too_many_arguments)]
+fn push_preprocess(
+    lines: &mut Vec<String>,
+    label: &str,
+    preprocess: &PreprocessConfig,
+    overridden: bool,
+    name_width: usize,
+    strategy_width: usize,
+    screen: Screen,
+) {
+    let (state, tone) = preprocess_state(preprocess);
+    let state = if overridden {
+        format!("override: {state}")
+    } else {
+        state
+    };
+    let room = screen.width.saturating_sub(6 + name_width).max(1);
+    let state = style::truncate(&state, room);
+    lines.push(format!(
+        "    {}{}",
+        style::pad_right(&style::paint(label, Tone::Plain), name_width + 2),
+        style::paint(state, tone)
+    ));
+
+    let rule_tone = if preprocess.enabled {
+        Tone::Plain
+    } else {
+        Tone::Muted
+    };
+    for rule in &preprocess.rules {
+        let params = params_text(&rule.params);
+        let room = screen.width.saturating_sub(6 + strategy_width).max(1);
+        let params = style::truncate(&params, room);
+        let mut line = format!(
+            "      {}",
+            style::pad_right(
+                &style::paint(rule.strategy.def().id, rule_tone),
+                strategy_width
+            )
+        );
+        if !params.is_empty() {
+            line.push_str(&style::paint(params, Tone::Muted));
+        }
+        lines.push(line);
+    }
+}
+
+fn preprocess_state(preprocess: &PreprocessConfig) -> (String, Tone) {
+    let count = preprocess.rules.len();
+    match (preprocess.enabled, count) {
+        (false, 0) => ("disabled".to_string(), Tone::Muted),
+        (false, count) => (format!("disabled, {count} {}", plural(count)), Tone::Warn),
+        (true, 0) => ("enabled, no rules".to_string(), Tone::Warn),
+        (true, count) => (format!("enabled, {count} {}", plural(count)), Tone::Good),
+    }
 }
 
 fn plural(count: usize) -> &'static str {
@@ -353,7 +401,7 @@ fn save_config(config: &Config, config_path: Option<&Path>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use upio::preprocess::{PreprocessConfig, PreprocessRule, PreprocessStrategy};
+    use upio::preprocess::{PreprocessRule, PreprocessStrategy};
     use upio_config::UploaderEndpointConfig;
 
     fn screen() -> Screen {
@@ -366,13 +414,13 @@ mod tests {
     fn with_preprocess() -> Config {
         Config {
             bunkr: Some(UploaderEndpointConfig {
-                preprocess: PreprocessConfig {
+                preprocess: Some(PreprocessConfig {
                     enabled: true,
                     rules: ["normalize_name", "split_video"]
                         .iter()
                         .map(|id| PreprocessRule::new(PreprocessStrategy::by_id(id).unwrap()))
                         .collect(),
-                },
+                }),
                 ..Default::default()
             }),
             ..Config::default()
@@ -415,7 +463,7 @@ mod tests {
         .join("\n");
         assert!(text.contains("(unset)"));
         assert!(text.contains("(none)"));
-        assert!(text.contains(&format!("0 of {} keys set", ConfigKey::ALL.len())));
+        assert!(text.contains(&format!("0 of {} config keys set", ConfigKey::ALL.len())));
     }
 
     #[test]
@@ -429,9 +477,28 @@ mod tests {
         .join("\n");
         assert!(text.contains("preprocess"));
         assert!(text.contains("enabled, 2 rules"));
+        assert!(text.contains("override: enabled, 2 rules"));
         assert!(text.contains("normalize_name"));
         assert!(text.contains("split_video"));
         assert!(text.contains("replacement="));
+    }
+
+    #[test]
+    fn summary_marks_inherited_preprocess() {
+        let config = Config {
+            preprocess: PreprocessConfig {
+                enabled: true,
+                rules: vec![PreprocessRule::new(
+                    PreprocessStrategy::by_id("wrap_zip").unwrap(),
+                )],
+            },
+            ..Config::default()
+        };
+        let text = summary_lines(&config, Path::new("config.toml"), false, screen()).join("\n");
+        assert!(text.contains("global"));
+        assert!(text.contains("enabled, 1 rule"));
+        assert!(text.contains("bunkr"));
+        assert!(text.contains("inherits global"));
     }
 
     #[test]

@@ -4,20 +4,33 @@ Files can be transformed before upload so they fit the service's limits. Rules
 match files by MIME type and **chain**: they always run in a fixed canonical
 order (`normalize_name` → `compress_image` → `wrap_zip` → `split_video`),
 feeding each output into the next rule regardless of how they are listed.
-Preprocessing is configured per service inside the config file:
+Preprocessing is configured globally in the config file and can be replaced per
+service:
 
 ```toml
+[preprocess]
+enabled = true
+
+[[preprocess.rules]]
+strategy = "normalize_name"
+params = { replacement = "_", lowercase = true }
+
+[[preprocess.rules]]
+strategy = "compress_image"
+params = { format = "jpeg", quality = 80, max_dimensions = "4096x4096" }
+
+# Optional per-service replacement. This table is used instead of the global
+# one for bunkr; nothing is merged with the global rules.
 [bunkr.preprocess]
 enabled = true
 
 [[bunkr.preprocess.rules]]
-strategy = "normalize_name"
-params = { replacement = "_", lowercase = true }
-
-[[bunkr.preprocess.rules]]
-strategy = "compress_image"
-params = { format = "jpeg", quality = 80, max_dimensions = "4096x4096" }
+strategy = "split_video"
 ```
+
+Services without a `[service.preprocess]` table inherit the global
+configuration. An override that only sets `enabled = false` disables
+preprocessing for that service without touching the other services.
 
 ## Rule fields
 

@@ -114,12 +114,12 @@ async fn preprocess_wraps_file_and_uploads_result() {
 
     let uploader = FakeUploader::new();
     let config = UploaderEndpointConfig {
-        preprocess: PreprocessConfig {
+        preprocess: Some(PreprocessConfig {
             enabled: true,
             rules: vec![PreprocessRule::new(
                 PreprocessStrategy::by_id("wrap_zip").unwrap(),
             )],
-        },
+        }),
         ..Default::default()
     };
 
@@ -166,12 +166,12 @@ async fn partial_failure_reports_error_but_keeps_urls() {
         ..FakeUploader::new()
     };
     let config = UploaderEndpointConfig {
-        preprocess: PreprocessConfig {
+        preprocess: Some(PreprocessConfig {
             enabled: true,
             rules: vec![PreprocessRule::new(
                 PreprocessStrategy::by_id("wrap_zip").unwrap(),
             )],
-        },
+        }),
         ..Default::default()
     };
 
@@ -231,7 +231,7 @@ async fn chained_rules_upload_and_cleanup() {
 
     let uploader = FakeUploader::new();
     let config = UploaderEndpointConfig {
-        preprocess: PreprocessConfig {
+        preprocess: Some(PreprocessConfig {
             enabled: true,
             rules: vec![
                 PreprocessRule {
@@ -243,7 +243,7 @@ async fn chained_rules_upload_and_cleanup() {
                     params: serde_json::json!({}),
                 },
             ],
-        },
+        }),
         ..Default::default()
     };
 
@@ -316,12 +316,12 @@ async fn init_failure_with_preprocessing_also_blocks_uploads() {
         ..FakeUploader::new()
     };
     let config = UploaderEndpointConfig {
-        preprocess: PreprocessConfig {
+        preprocess: Some(PreprocessConfig {
             enabled: true,
             rules: vec![PreprocessRule::new(
                 PreprocessStrategy::by_id("wrap_zip").unwrap(),
             )],
-        },
+        }),
         ..Default::default()
     };
 

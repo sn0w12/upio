@@ -22,16 +22,22 @@ pub fn run(config_path: Option<&Path>) -> Result<()> {
         .collect::<Vec<_>>();
     output::print_table(&tools);
 
+    report("global", &config.preprocess);
     for id in UploaderId::ALL {
-        let endpoint = config.get_uploader_config(id.name());
-        if !endpoint.preprocess.enabled {
-            continue;
-        }
-        match upio::preprocess::validate_config(&endpoint.preprocess) {
-            Ok(()) => println!("{}: preprocess rules valid", id.name()),
-            Err(e) => println!("{}: invalid preprocess config: {}", id.name(), e),
+        if let Some(preprocess) = config.preprocess_override(id.name()) {
+            report(id.name(), preprocess);
         }
     }
 
     Ok(())
+}
+
+fn report(label: &str, preprocess: &upio::preprocess::PreprocessConfig) {
+    if !preprocess.enabled {
+        return;
+    }
+    match upio::preprocess::validate_config(preprocess) {
+        Ok(()) => println!("{}: preprocess rules valid", label),
+        Err(e) => println!("{}: invalid preprocess config: {}", label, e),
+    }
 }

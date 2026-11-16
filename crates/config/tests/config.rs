@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use upio_config::{Config, ConfigKey, Settings};
+use upio_core::preprocess::{PreprocessConfig, PreprocessRule, PreprocessStrategy};
 
 #[test]
 fn save_and_load_roundtrip() {
@@ -58,13 +59,14 @@ fn preprocess_rules_parse_from_toml() {
 
     assert_eq!(bunkr.token.as_deref(), Some("abc"));
     assert_eq!(bunkr.folder_id.as_deref(), Some("123"));
-    assert!(bunkr.preprocess.enabled);
-    assert_eq!(bunkr.preprocess.rules.len(), 2);
+    let preprocess = bunkr.preprocess.expect("preprocess parsed");
+    assert!(preprocess.enabled);
+    assert_eq!(preprocess.rules.len(), 2);
 
-    let video = &bunkr.preprocess.rules[0];
+    let video = &preprocess.rules[0];
     assert_eq!(video.strategy.def().id, "split_video");
 
-    let zip = &bunkr.preprocess.rules[1];
+    let zip = &preprocess.rules[1];
     assert_eq!(zip.strategy.def().id, "wrap_zip");
 }
 
@@ -141,7 +143,121 @@ fn get_uploader_config_respects_preprocess() {
     let gofile = config.get_uploader_config("gofile");
 
     assert_eq!(gofile.token.as_deref(), Some("abc"));
-    assert!(gofile.preprocess.enabled);
+    assert!(gofile.preprocess.expect("preprocess present").enabled);
+}
+
+#[test]
+fn global_preprocess_applies_until_a_service_overrides_it() {
+    let toml_str = r#"
+        [preprocess]
+        enabled = true
+
+        [[preprocess.rules]]
+        strategy = "normalize_name"
+
+        [bunkr.preprocess]
+        enabled = false
+    "#;
+    let config: Config = toml::from_str(toml_str).unwrap();
+
+    let gofile = config.preprocess_for("gofile");
+    assert!(gofile.enabled);
+    assert_eq!(gofile.rules.len(), 1);
+    assert_eq!(gofile.rules[0].strategy.def().id, "normalize_name");
+
+    let bunkr = config.preprocess_for("bunkr");
+    assert!(!bunkr.enabled);
+    assert!(bunkr.rules.is_empty());
+
+    assert!(config.preprocess_override("bunkr").is_some());
+    assert!(config.preprocess_override("gofile").is_none());
+    assert!(config.endpoint_for("gofile").preprocess.unwrap().enabled);
+}
+
+#[test]
+fn service_preprocess_replaces_the_global_rules() {
+    let toml_str = r#"
+        [preprocess]
+        enabled = true
+
+        [[preprocess.rules]]
+        strategy = "normalize_name"
+
+        [gofile.preprocess]
+        enabled = true
+
+        [[gofile.preprocess.rules]]
+        strategy = "wrap_zip"
+    "#;
+    let config: Config = toml::from_str(toml_str).unwrap();
+
+    let gofile = config.preprocess_for("gofile");
+    assert_eq!(gofile.rules.len(), 1);
+    assert_eq!(gofile.rules[0].strategy.def().id, "wrap_zip");
+}
+
+#[test]
+fn serializing_omits_inherited_preprocess() {
+    let mut config = Config::default();
+    config.preprocess.enabled = true;
+    config.preprocess.rules.push(PreprocessRule::new(
+        PreprocessStrategy::by_id("wrap_zip").unwrap(),
+    ));
+    config.bunkr = Some(Default::default());
+
+    let toml = config.to_toml().unwrap();
+    assert!(toml.contains("[preprocess]"));
+    assert!(!toml.contains("[bunkr.preprocess]"));
+}
+
+#[test]
+fn preprocess_mut_seeds_the_override_from_global() {
+    let mut config = Config::default();
+    config.preprocess.enabled = true;
+    config.preprocess.rules.push(PreprocessRule::new(
+        PreprocessStrategy::by_id("wrap_zip").unwrap(),
+    ));
+
+    let preprocess = config.preprocess_mut("gofile").unwrap();
+    assert!(preprocess.enabled);
+    assert_eq!(preprocess.rules.len(), 1);
+    preprocess.enabled = false;
+
+    let gofile = config.preprocess_for("gofile");
+    assert!(!gofile.enabled);
+    assert_eq!(gofile.rules.len(), 1);
+    assert!(config.preprocess_override("gofile").is_some());
+}
+
+#[test]
+fn settings_extract_keeps_preprocess_layers() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.toml");
+    std::fs::write(
+        &path,
+        "[preprocess]\nenabled = true\n\n[bunkr.preprocess]\nenabled = false\n",
+    )
+    .unwrap();
+
+    let config = Settings::load_from(&path).unwrap().extract().unwrap();
+    assert!(config.preprocess.enabled);
+    assert!(!config.preprocess_for("bunkr").enabled);
+    assert!(config.preprocess_for("gofile").enabled);
+}
+
+#[test]
+fn clearing_a_service_override_restores_inheritance() {
+    let mut config = Config::default();
+    config.preprocess.enabled = true;
+    config.preprocess.rules.push(PreprocessRule::new(
+        PreprocessStrategy::by_id("wrap_zip").unwrap(),
+    ));
+    config.preprocess_mut("bunkr").unwrap().enabled = false;
+    assert!(!config.preprocess_for("bunkr").enabled);
+
+    assert!(config.clear_preprocess_override("bunkr"));
+    assert!(config.preprocess_for("bunkr").enabled);
+    assert!(!config.clear_preprocess_override("bunkr"));
 }
 
 #[test]
@@ -167,16 +283,17 @@ fn rules_parse_strategy_and_params() {
 
     let config = Config::from_file(&path).unwrap();
     let bunkr = config.bunkr.expect("bunkr parsed");
+    let preprocess = bunkr.preprocess.expect("preprocess parsed");
 
-    assert!(bunkr.preprocess.enabled);
-    assert_eq!(bunkr.preprocess.rules.len(), 2);
+    assert!(preprocess.enabled);
+    assert_eq!(preprocess.rules.len(), 2);
 
-    let image = &bunkr.preprocess.rules[0];
+    let image = &preprocess.rules[0];
     assert_eq!(image.strategy.def().id, "compress_image");
     assert_eq!(image.params["format"], "jpeg");
     assert_eq!(image.params["quality"], 70);
 
-    let normalize = &bunkr.preprocess.rules[1];
+    let normalize = &preprocess.rules[1];
     assert_eq!(normalize.strategy.def().id, "normalize_name");
     assert_eq!(normalize.params["lowercase"], true);
 }
@@ -253,11 +370,9 @@ fn settings_extract_inner() {
 
 #[test]
 fn save_strips_null_params() {
-    use upio_core::preprocess::{PreprocessConfig, PreprocessRule, PreprocessStrategy};
-
     let config = Config {
         bunkr: Some(upio_core::UploaderEndpointConfig {
-            preprocess: PreprocessConfig {
+            preprocess: Some(PreprocessConfig {
                 enabled: true,
                 rules: vec![PreprocessRule {
                     // compress_image defaults contain `format: null`, which
@@ -265,7 +380,7 @@ fn save_strips_null_params() {
                     strategy: PreprocessStrategy::by_id("compress_image").unwrap(),
                     params: serde_json::json!({ "format": null, "quality": 85 }),
                 }],
-            },
+            }),
             ..Default::default()
         }),
         ..Default::default()
@@ -278,7 +393,12 @@ fn save_strips_null_params() {
     );
 
     let reparsed: Config = toml::from_str(&toml).unwrap();
-    let rule = &reparsed.bunkr.unwrap().preprocess.rules[0];
+    let preprocess = reparsed
+        .bunkr
+        .unwrap()
+        .preprocess
+        .expect("override survives the roundtrip");
+    let rule = &preprocess.rules[0];
     assert_eq!(rule.strategy.def().id, "compress_image");
     assert_eq!(rule.params["quality"], 85);
     assert!(rule.params.get("format").is_none());
