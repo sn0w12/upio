@@ -12,7 +12,7 @@ Currently supported services:
 | Service     | Crate                 | Auth Required | Folder / album | Download | Capabilities |
 | ----------- | --------------------- | ------------- | -------------- | -------- | ------------ |
 | Bunkr.cr    | `uploader-bunkr`      | Yes           | Yes            | Yes      | All          |
-| GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | No       | All          |
+| GoFile.io   | `uploader-gofile`     | Optional\*    | Yes            | Yes      | All          |
 | Fileditch   | `uploader-fileditch`  | No            | No             | Yes      | All          |
 | Filester.me | `uploader-filester`   | Optional\*    | Yes            | No       | All          |
 | GoonBox     | `uploader-goonbox`    | Yes           | Yes            | No       | Image        |

@@ -51,6 +51,17 @@ fn bunkr_share_urls_are_registered() {
     assert_eq!(album.name(), "bunkr");
 }
 
+#[cfg(feature = "download")]
+#[test]
+fn gofile_share_urls_are_registered() {
+    let id = UploaderId::from_url("https://gofile.io/d/abc123").unwrap();
+    assert_eq!(id.name(), "gofile");
+    assert!(id.supports_download());
+
+    let downloader = build_downloader(id, &UploaderEndpointConfig::default()).unwrap();
+    assert_eq!(downloader.name(), "gofile");
+}
+
 #[test]
 fn download_support_is_explicit_per_service() {
     for id in UploaderId::ALL {
