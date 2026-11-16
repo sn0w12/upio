@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use rune::{col, el, row, text, El, ScrollSpec};
+use rune::{col, el, row, text, El, ScrollSpec, TextStyle};
 use rune_kit::{
     Badge, BadgeVariant, Button, ButtonVariant, ControlSize, IconButton, IconButtonVariant, Kit,
     ScrollBar, ScrollBarStyle, Switch, TextArea, TextInput,
@@ -256,11 +256,46 @@ fn appearance(s: &App, k: &Kit) -> El {
         ))
 }
 
+fn page_heading(k: &Kit, title: &str, description: &str) -> El {
+    col()
+        .w_full()
+        .gap(4.0)
+        .child(
+            text(title)
+                .font(
+                    TextStyle {
+                        size: 22.0,
+                        weight: 600.0,
+                        ..k.ty.ui_medium
+                    }
+                    .lh(28.0),
+                )
+                .color(k.c.text_base),
+        )
+        .child(
+            text(description)
+                .font(k.ty.caption())
+                .color(k.c.text_muted)
+                .wrap(),
+        )
+}
+
 fn heading(k: &Kit, title: &str, description: &str) -> El {
     col()
         .w_full()
-        .gap(2.0)
-        .child(text(title).font(k.ty.ui_medium).color(k.c.text_base))
+        .gap(4.0)
+        .child(
+            text(title)
+                .font(
+                    TextStyle {
+                        size: 18.0,
+                        weight: 500.0,
+                        ..k.ty.ui_medium
+                    }
+                    .lh(24.0),
+                )
+                .color(k.c.text_base),
+        )
         .child(
             text(description)
                 .font(k.ty.caption())
@@ -278,15 +313,8 @@ fn section(k: &Kit, title: &str, description: &str, body: El) -> El {
         .child(body)
 }
 
-fn rows(k: &Kit, items: Vec<El>) -> El {
-    let mut out = col().w_full().gap(0.0);
-    for (index, item) in items.into_iter().enumerate() {
-        if index > 0 {
-            out = out.child(hairline(k));
-        }
-        out = out.child(item);
-    }
-    out
+fn rows(items: Vec<El>) -> El {
+    col().w_full().children(items)
 }
 
 fn setting_label(k: &Kit, title: &str, help: &str) -> El {
@@ -440,7 +468,7 @@ fn service_detail(s: &App, k: &Kit) -> El {
         for spec in specs {
             items.push(field(s, k, spec));
         }
-        rows(k, items)
+        rows(items)
     };
 
     col()
@@ -448,7 +476,7 @@ fn service_detail(s: &App, k: &Kit) -> El {
         .grow(1.0)
         .min_w(0.0)
         .gap(16.0)
-        .child(heading(k, id.def().display_name, &summary))
+        .child(page_heading(k, id.def().display_name, &summary))
         .child(section(
             k,
             "Uploads",
@@ -556,7 +584,7 @@ fn preprocessing(s: &App, k: &Kit, id: UploaderId) -> El {
         k,
         "Preprocessing",
         "Prepare files before upload. Strategies use their default parameters; edit them in Advanced.",
-        rows(k, items),
+        rows(items),
     )
 }
 
@@ -581,7 +609,7 @@ fn tools(s: &App, k: &Kit) -> El {
                     .build(k),
             ));
         }
-        rows(k, items)
+        rows(items)
     };
 
     col().key("tools-section").w_full().gap(20.0).child(section(
@@ -596,13 +624,10 @@ fn advanced(s: &App, k: &Kit) -> El {
     let config_path = Config::path();
     let gui_path = GuiPrefs::path();
 
-    let files = rows(
-        k,
-        vec![
-            path_row(k, "Config", &config_path),
-            path_row(k, "GUI state", &gui_path),
-        ],
-    );
+    let files = rows(vec![
+        path_row(k, "Config", &config_path),
+        path_row(k, "GUI state", &gui_path),
+    ]);
 
     let mut raw = col().w_full().gap(12.0).child(setting_row(
         k,
@@ -616,7 +641,6 @@ fn advanced(s: &App, k: &Kit) -> El {
     ));
     if s.show_raw {
         raw = raw
-            .child(hairline(k))
             .child(
                 TextArea::new(&s.raw)
                     .label("config.toml")
