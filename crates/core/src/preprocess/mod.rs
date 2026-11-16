@@ -340,7 +340,7 @@ pub async fn preprocess_file(
 }
 
 /// Validate every configured rule's params, without transforming anything.
-/// Useful for config-time checks (e.g. `upio-cli preprocess check`).
+/// Useful for config-time checks (e.g. `upio preprocess check`).
 ///
 /// Returns an error describing the first invalid rule.
 ///

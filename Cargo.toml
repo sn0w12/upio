@@ -29,6 +29,7 @@ accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "631e8a67cb
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/sn0w12/upio"
 
 [workspace.dependencies]
 anyhow = "1.0"

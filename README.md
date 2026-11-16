@@ -23,15 +23,21 @@ Currently supported services:
 
 ## Install
 
+Every release ships a prebuilt CLI and desktop installers. Install the CLI with
+[cargo-binstall](https://github.com/cargo-bins/cargo-binstall):
+
+```sh
+cargo binstall --git https://github.com/sn0w12/upio upio-cli
+```
+
+Or build it from the repository:
+
 ```sh
 cargo install --path crates/cli
-```
-
-Or run it from the repository:
-
-```sh
 cargo run -p upio-cli -- list
 ```
+
+The desktop installers are attached to each release.
 
 ## Quick start
 

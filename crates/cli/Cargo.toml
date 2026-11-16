@@ -4,6 +4,14 @@ description = "CLI tool for uploading and downloading files from various hosting
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "upio"
+path = "src/main.rs"
+
+[package.metadata.binstall]
+bin-dir = "{ bin }{ binary-ext }"
 
 [dependencies]
 upio = { workspace = true, features = ["download"] }

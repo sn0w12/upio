@@ -64,6 +64,23 @@ disagree. The tables assume every feature, including `download`, is enabled.
 
 ```sh
 cargo build --release -p upio-cli
+cargo build --release -p upio-gui
 ```
 
 The release profile is configured in the workspace root.
+
+## Releasing
+
+`.github/workflows/release.yml` builds and uploads everything when a `v*` tag is
+pushed. The tag must match the `upio-cli` version, so bump `version` in
+`crates/cli/Cargo.toml` first:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The CLI archives are named `upio-cli-<target>` and contain the `upio` binary,
+which is the layout `cargo binstall` expects. The GUI jobs run `cargo packager`
+and attach the NSIS installer, the macOS app and DMG, and the Debian package and
+AppImage.

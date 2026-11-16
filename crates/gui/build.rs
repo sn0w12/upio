@@ -31,8 +31,8 @@ fn windows_resource() {
         .set_icon("assets/app-icons/icon.ico")
         .set("ProductName", "upio")
         .set("FileDescription", "upio")
-        .set("InternalName", "upio.exe")
-        .set("OriginalFilename", "upio.exe")
+        .set("InternalName", "upio-gui.exe")
+        .set("OriginalFilename", "upio-gui.exe")
         .set_version_info(winresource::VersionInfo::FILEVERSION, packed)
         .set_version_info(winresource::VersionInfo::PRODUCTVERSION, packed);
     resource
