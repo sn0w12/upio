@@ -26,14 +26,15 @@ use upio_core::types::UploaderEndpointConfig;
 const ACCOUNTS_URL: &str = "https://api.gofile.io/accounts";
 const CONTENT_URL: &str = "https://api.gofile.io/contents";
 const WEBSITE_ORIGIN: &str = "https://gofile.io";
+const WT_SCRIPT_URL: &str = "https://gofile.io/js/wt.obf.js";
 const USER_AGENT_VALUE: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
                                 AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 \
                                 Safari/537.36";
 const LANGUAGE: &str = "en-US";
 
-/// Salt embedded in GoFile's `wt.obf.js`. If downloads start returning
-/// `error-notPremium`, this value has rotated and needs updating.
-const WEBSITE_TOKEN_SALT: &str = "12af056dacea0b";
+/// Fallback salt, used only when the live client script cannot be decoded.
+/// The preferred path extracts the current salt from `wt.obf.js`.
+const FALLBACK_WEBSITE_TOKEN_SALT: &str = "12af056dacea0b";
 const WEBSITE_TOKEN_WINDOW_SECONDS: i64 = 14_400;
 
 const MAX_FOLDER_DEPTH: usize = 64;
@@ -94,6 +95,7 @@ pub struct GoFileDownloader {
     client: Client,
     provided_token: Option<String>,
     guest_token: RwLock<Option<String>>,
+    salt: RwLock<Option<String>>,
 }
 
 impl GoFileDownloader {
@@ -104,6 +106,7 @@ impl GoFileDownloader {
             client: Client::new(),
             provided_token: None,
             guest_token: RwLock::new(None),
+            salt: RwLock::new(None),
         }
     }
 
@@ -112,6 +115,7 @@ impl GoFileDownloader {
             client: Client::new(),
             provided_token: Some(token.to_string()),
             guest_token: RwLock::new(None),
+            salt: RwLock::new(None),
         }
     }
 
@@ -156,6 +160,52 @@ impl GoFileDownloader {
                 status_code: Some(status.as_u16()),
             })?;
         Ok(token)
+    }
+
+    async fn salt(&self) -> String {
+        if let Some(salt) = self.salt.read().await.clone() {
+            return salt;
+        }
+
+        let mut guard = self.salt.write().await;
+        if let Some(salt) = guard.clone() {
+            return salt;
+        }
+
+        let salt = self
+            .extract_salt()
+            .await
+            .unwrap_or_else(|| FALLBACK_WEBSITE_TOKEN_SALT.to_string());
+        *guard = Some(salt.clone());
+        salt
+    }
+
+    async fn extract_salt(&self) -> Option<String> {
+        let response = self
+            .client
+            .get(WT_SCRIPT_URL)
+            .header(USER_AGENT, USER_AGENT_VALUE)
+            .send()
+            .await
+            .ok()?
+            .error_for_status()
+            .ok()?;
+        let script = response.text().await.ok()?;
+        extract_salt_from_script(&script)
+    }
+
+    async fn website_token(&self, account_token: &str, window_offset: i64) -> String {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        website_token_for(
+            account_token,
+            now / WEBSITE_TOKEN_WINDOW_SECONDS + window_offset,
+            USER_AGENT_VALUE,
+            LANGUAGE,
+            &self.salt().await,
+        )
     }
 
     fn fetch_node<'a>(
@@ -228,7 +278,7 @@ impl GoFileDownloader {
         let mut window_offset = 0i64;
 
         for attempt in 0..RATE_LIMIT_ATTEMPTS {
-            let website_token = website_token(token, window_offset);
+            let website_token = self.website_token(token, window_offset).await;
             let mut query = vec![
                 ("contentFilter", ""),
                 ("page", "1"),
@@ -436,20 +486,6 @@ fn flatten_single_file(node: RemoteNode) -> RemoteNode {
     }
 }
 
-fn website_token(account_token: &str, window_offset: i64) -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs() as i64;
-    website_token_for(
-        account_token,
-        now / WEBSITE_TOKEN_WINDOW_SECONDS + window_offset,
-        USER_AGENT_VALUE,
-        LANGUAGE,
-        WEBSITE_TOKEN_SALT,
-    )
-}
-
 fn website_token_for(
     account_token: &str,
     window: i64,
@@ -467,6 +503,316 @@ fn hex_sha256(value: &[u8]) -> String {
         output.push_str(&format!("{byte:02x}"));
     }
     output
+}
+
+/// Recover the website-token salt from GoFile's obfuscated client script.
+///
+/// The salt is one entry in an encrypted string table. The table is rotated by
+/// the script's bootstrap, so every rotation is tried and the decoded values
+/// are filtered to the salt's shape.
+fn extract_salt_from_script(script: &str) -> Option<String> {
+    let array = string_arrays(script).into_iter().max_by_key(Vec::len)?;
+    if array.len() < 8 {
+        return None;
+    }
+
+    let body = function_body(script, "generateWT")?;
+    let calls = decoder_calls(body);
+    if calls.is_empty() {
+        return None;
+    }
+
+    for rotation in 0..array.len() {
+        for (index, key) in &calls {
+            if *index >= array.len() {
+                continue;
+            }
+            let entry = &array[(index + rotation) % array.len()];
+            let Some(value) = decode_entry(entry, key) else {
+                continue;
+            };
+            if is_salt(&value) {
+                return Some(value);
+            }
+        }
+    }
+
+    None
+}
+
+fn is_salt(value: &str) -> bool {
+    value.len() == 14
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn string_arrays(script: &str) -> Vec<Vec<String>> {
+    let mut arrays = Vec::new();
+    let mut offset = 0;
+
+    while let Some(relative) = script[offset..].find('[') {
+        let start = offset + relative;
+        if !script[..start].trim_end().ends_with('=') {
+            offset = start + 1;
+            continue;
+        }
+        if let Some(end) = matching_bracket(script, start) {
+            let values = array_strings(&script[start + 1..end]);
+            if values.len() >= 8 {
+                arrays.push(values);
+            }
+            offset = end + 1;
+        } else {
+            offset = start + 1;
+        }
+    }
+
+    arrays
+}
+
+fn matching_bracket(text: &str, start: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut index = start;
+
+    while index < text.len() {
+        let ch = text[index..].chars().next()?;
+        match ch {
+            '[' => depth += 1,
+            ']' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(index);
+                }
+            }
+            '\'' | '"' => {
+                index = skip_string(text, index)?;
+                continue;
+            }
+            _ => {}
+        }
+        index += ch.len_utf8();
+    }
+
+    None
+}
+
+fn array_strings(content: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut index = 0;
+
+    while index < content.len() {
+        let ch = content[index..].chars().next().unwrap_or('\0');
+        if ch == '\'' || ch == '"' {
+            if let Some((value, end)) = parse_string_literal(content, index) {
+                values.push(value);
+                index = end;
+                continue;
+            }
+        }
+        index += ch.len_utf8();
+    }
+
+    values
+}
+
+fn function_body<'a>(script: &'a str, name: &str) -> Option<&'a str> {
+    let marker = format!("function {name}(");
+    let start = script.find(&marker)?;
+    let open = script[start..].find('{')? + start;
+
+    let mut depth = 0usize;
+    let mut index = open;
+    while index < script.len() {
+        let ch = script[index..].chars().next()?;
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.checked_sub(1)?;
+                if depth == 0 {
+                    return Some(&script[open..=index]);
+                }
+            }
+            '\'' | '"' => {
+                index = skip_string(script, index)?;
+                continue;
+            }
+            _ => {}
+        }
+        index += ch.len_utf8();
+    }
+
+    None
+}
+
+fn decoder_calls(body: &str) -> Vec<(usize, String)> {
+    let mut calls = Vec::new();
+    let mut offset = 0;
+
+    while let Some(relative) = body[offset..].find("0x") {
+        let start = offset + relative + 2;
+        let digits = body[start..]
+            .chars()
+            .take_while(|ch| ch.is_ascii_hexdigit())
+            .collect::<String>();
+        if digits.len() < 2 {
+            offset = start;
+            continue;
+        }
+
+        let after = start + digits.len();
+        let Some(rest) = body[after..].trim_start().strip_prefix(',') else {
+            offset = after;
+            continue;
+        };
+        let rest = rest.trim_start();
+        if !rest.starts_with('\'') && !rest.starts_with('"') {
+            offset = after;
+            continue;
+        }
+
+        let quote = body.len() - rest.len();
+        if let Some((key, _)) = parse_string_literal(body, quote) {
+            if let Ok(index) = usize::from_str_radix(&digits, 16) {
+                if let Some(index) = index.checked_sub(0x136) {
+                    calls.push((index, key));
+                }
+            }
+        }
+
+        offset = after;
+    }
+
+    calls
+}
+
+fn skip_string(text: &str, start: usize) -> Option<usize> {
+    parse_string_literal(text, start).map(|(_, end)| end)
+}
+
+fn parse_string_literal(text: &str, start: usize) -> Option<(String, usize)> {
+    let quote = text[start..].chars().next()?;
+    if quote != '\'' && quote != '"' {
+        return None;
+    }
+
+    let mut value = String::new();
+    let mut index = start + quote.len_utf8();
+
+    while index < text.len() {
+        let ch = text[index..].chars().next()?;
+        if ch == quote {
+            return Some((value, index + ch.len_utf8()));
+        }
+        if ch != '\\' {
+            value.push(ch);
+            index += ch.len_utf8();
+            continue;
+        }
+
+        index += 1;
+        let escaped = text[index..].chars().next()?;
+        match escaped {
+            'x' => {
+                let hex = text.get(index + 1..index + 3)?;
+                value.push(u8::from_str_radix(hex, 16).ok()? as char);
+                index += 3;
+            }
+            'u' => {
+                let hex = text.get(index + 1..index + 5)?;
+                let code = u32::from_str_radix(hex, 16).ok()?;
+                value.push(char::from_u32(code)?);
+                index += 5;
+            }
+            'n' => {
+                value.push('\n');
+                index += 1;
+            }
+            'r' => {
+                value.push('\r');
+                index += 1;
+            }
+            't' => {
+                value.push('\t');
+                index += 1;
+            }
+            'b' => {
+                value.push('\u{8}');
+                index += 1;
+            }
+            'f' => {
+                value.push('\u{c}');
+                index += 1;
+            }
+            'v' => {
+                value.push('\u{b}');
+                index += 1;
+            }
+            '0' => {
+                value.push('\0');
+                index += 1;
+            }
+            other => {
+                value.push(other);
+                index += other.len_utf8();
+            }
+        }
+    }
+
+    None
+}
+
+fn custom_base64(value: &str) -> Vec<u8> {
+    const ALPHABET: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+/=";
+
+    let mut bits = 0u64;
+    let mut count = 0u32;
+    let mut output = Vec::new();
+
+    for ch in value.chars() {
+        let Some(index) = ALPHABET.find(ch) else {
+            continue;
+        };
+        if index >= 64 {
+            continue;
+        }
+        bits = ((bits << 6) | index as u64) & 0xFFFF_FFFF;
+        count += 6;
+        if count >= 8 {
+            count -= 8;
+            output.push(((bits >> count) & 0xFF) as u8);
+        }
+    }
+
+    output
+}
+
+fn decode_entry(entry: &str, key: &str) -> Option<String> {
+    let cipher = String::from_utf8(custom_base64(entry)).ok()?;
+    let key_units = key.encode_utf16().collect::<Vec<_>>();
+    if key_units.is_empty() {
+        return None;
+    }
+
+    let mut state: [u8; 256] = std::array::from_fn(|index| index as u8);
+    let mut j = 0usize;
+    for i in 0..256 {
+        j = (j + state[i] as usize + key_units[i % key_units.len()] as usize) % 256;
+        state.swap(i, j);
+    }
+
+    let mut i = 0usize;
+    j = 0;
+    let mut output = String::new();
+    for unit in cipher.encode_utf16() {
+        i = (i + 1) % 256;
+        j = (j + state[i] as usize) % 256;
+        state.swap(i, j);
+        let keystream = state[(state[i] as usize + state[j] as usize) % 256];
+        output.push(char::from_u32((unit ^ keystream as u16) as u32)?);
+    }
+
+    Some(output)
 }
 
 fn api_error(status: &str) -> UpioError {
@@ -526,9 +872,53 @@ mod tests {
     #[test]
     fn the_website_token_matches_the_client_algorithm() {
         assert_eq!(
-            website_token_for("abc", 123, USER_AGENT_VALUE, "en-US", WEBSITE_TOKEN_SALT),
+            website_token_for(
+                "abc",
+                123,
+                USER_AGENT_VALUE,
+                "en-US",
+                FALLBACK_WEBSITE_TOKEN_SALT
+            ),
             "4a83b913f073b9b03e7bd8f23fefd438f3e769c9522124e166aa9cd7a9193fcf"
         );
+    }
+
+    #[test]
+    fn the_obfuscated_salt_entry_decodes() {
+        assert_eq!(
+            decode_entry("W5iiW6BcINeap8ofW484x8oxW50Q", "]6)]").as_deref(),
+            Some("12af056dacea0b")
+        );
+    }
+
+    #[test]
+    fn the_salt_is_extracted_from_an_obfuscated_script() {
+        let script = r#"
+            (function (a, b) {}(F, 1));
+            function F() {
+                var x = [
+                    'W5iiW6BcINeap8ofW484x8oxW50Q',
+                    'a', 'b', 'c', 'd', 'e', 'f', 'g'
+                ];
+                return x;
+            }
+            function generateWT(t) {
+                var d = function (i, k) { return ''; };
+                return d(0x136, '\x5d\x36\x29\x5d');
+            }
+        "#;
+
+        assert_eq!(
+            extract_salt_from_script(script).as_deref(),
+            Some("12af056dacea0b")
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "fetches GoFile's live client script"]
+    async fn extracts_the_live_salt() {
+        let downloader = GoFileDownloader::new();
+        assert!(downloader.extract_salt().await.is_some());
     }
 
     #[test]
