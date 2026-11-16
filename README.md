@@ -47,12 +47,6 @@ upio config set bunkr.token <your-token>
 upio upload -u bunkr video.mp4
 ```
 
-Download a share link:
-
-```sh
-upio download 'https://pixeldrain.com/u/<id>'
-```
-
 ## Command line
 
 The CLI has five subcommands. Running `upio <file>...` with no subcommand
@@ -108,41 +102,27 @@ but the row still reports the cleanup error.
 
 ### `download`
 
-Download files from a share URL. The service is chosen from the URL, and the
-matching service config supplies credentials, so private content and
-password-protected folders use the same settings as uploads.
+Download files from a share URL. Credentials come from the matching service
+config, so private content works without extra flags.
 
 ```sh
-# Download a file or folder into the current directory
 upio download 'https://filester.me/f/<id>'
-
-# Choose an output directory
 upio download -o downloads 'https://pixeldrain.com/u/<id>'
-
-# Unlock a password-protected folder
-upio download -p 'folder-password' 'https://gofile.io/d/<id>'
-
-# Resolve and print the planned destinations without transferring
 upio download --dry-run 'https://gofile.io/d/<id>'
-
-# Drop remote folder names, and skip files that already exist
-upio download --flat --on-conflict skip 'https://filester.me/f/<id>'
 ```
 
-| Flag                   | Description                                                                                     |
-| ---------------------- | ----------------------------------------------------------------------------------------------- |
-| `-o, --output`         | Output directory. Defaults to `global.download.output_dir`, then the current directory.         |
-| `-c, --concurrency`    | Maximum concurrent files. Defaults to `global.download.concurrency`.                            |
-| `--no-resume`          | Start partial files over instead of resuming them.                                             |
-| `--on-conflict`        | `rename`, `skip`, or `overwrite`. Defaults to `global.download.on_conflict`.                    |
-| `-p, --password`       | Password for protected links that do not already carry `?password=`.                            |
-| `--flat`               | Put every file directly in the output directory instead of preserving remote folder names.      |
-| `--dry-run`            | Resolve URLs and print the destination plan without writing files.                              |
+| Flag                | Description                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `-o, --output`      | Output directory. Defaults to `global.download.output_dir`, then the current directory.    |
+| `-c, --concurrency` | Maximum concurrent files. Defaults to `global.download.concurrency`.                       |
+| `--no-resume`       | Start partial files over instead of resuming them.                                        |
+| `--on-conflict`     | `rename`, `skip`, or `overwrite`. Defaults to `global.download.on_conflict`.               |
+| `-p, --password`    | Password for protected links without `?password=`.                                         |
+| `--flat`            | Put files directly in the output directory instead of preserving remote folder names.      |
+| `--dry-run`         | Print the planned destinations without writing files.                                      |
 
-A `?password=` query parameter on a share URL takes precedence over `-p` and
-the service's `link_password` config value. `global.disabled_downloaders`
-disables a service by name. The command exits non-zero if any URL has no
-downloader, fails to resolve, or fails to transfer.
+`-p` and `<service>.link_password` supply protected-link passwords; a
+`?password=` on the URL wins.
 
 ### `config`
 
@@ -240,13 +220,6 @@ folder_id = "…" # a list's id
 Unknown keys in `disabled_uploaders` or `disabled_downloaders` are inert; only
 exact canonical service names disable anything. The two lists are independent,
 so a service can be enabled for one direction and disabled for the other.
-
-Downloads reuse the same service credentials. A token or account is used when
-present, which reaches private or link-only content and lifts per-account
-limits. Public links still work without credentials. GoFile and Filester
-password-protected folders accept the password as a `?password=` query parameter
-on the share URL, or as `gofile.link_password` / `filester.link_password` in the
-config; the URL takes precedence.
 
 ## Preprocessing
 
@@ -423,13 +396,9 @@ A service advertises download support by adding a `DownloadDef` to its
 it, and `registry::build_downloader(id, config)` builds the downloader. A
 service without a descriptor is upload-only.
 
-Downloaders accept the same credentials as their uploaders:
-`BunkrDownloader`, `GoFileDownloader`, `FilesterDownloader`, and
-`PixeldrainDownloader` take a token through `with_token` or the config's
-`token`; `GoonboxDownloader` takes either a read-only API key (`with_token`) or
-an account (`with_account`). Fileditch has no accounts, tokens, or link
-passwords. GoFile and Filester read a protected-link password from the URL's
-`?password=` or the config's `link_password`.
+Downloaders use the same `token` and account fields as uploaders.
+`GoonboxDownloader` also accepts an account with `with_account`; GoFile and
+Filester read protected-link passwords from `link_password` or `?password=`.
 
 Fileditch share pages gate their direct link behind a WebAssembly browser check.
 Its downloader runs a real Chrome to pass that check, reads the link the page
