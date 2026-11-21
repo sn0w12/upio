@@ -56,7 +56,7 @@ pub async fn run(action: DemoAction) -> Result<()> {
                 .map(|item| (item.detail.clone(), item.bytes))
                 .collect();
             let uploads = play_upload(files).await?;
-            output::print_mirror(&batch, &uploads);
+            output::print_mirror(&[batch], &uploads);
         }
     }
     Ok(())

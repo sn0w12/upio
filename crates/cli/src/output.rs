@@ -236,9 +236,9 @@ pub fn print_download(batches: &[DownloadBatch]) {
     }
 }
 
-pub fn print_mirror(download: &DownloadBatch, uploads: &[UploaderResult]) {
+pub fn print_mirror(downloads: &[DownloadBatch], uploads: &[UploaderResult]) {
     let screen = style::screen();
-    for line in mirror_lines(download, uploads, screen) {
+    for line in mirror_lines(downloads, uploads, screen) {
         println!("{}", line.trim_end());
     }
 }
@@ -324,32 +324,45 @@ pub fn download_lines(batches: &[DownloadBatch], screen: Screen, live: bool) -> 
 }
 
 pub fn mirror_lines(
-    download: &DownloadBatch,
+    downloads: &[DownloadBatch],
     uploads: &[UploaderResult],
     screen: Screen,
 ) -> Vec<String> {
-    let elapsed = download.started.elapsed();
-    let files = download
-        .items
+    let elapsed = downloads
         .iter()
+        .map(|batch| batch.started)
+        .min()
+        .map(|started| started.elapsed())
+        .unwrap_or_default();
+    let files = downloads
+        .iter()
+        .flat_map(|batch| &batch.items)
         .filter(|item| !item.name.is_empty())
         .count();
     let files_label = format!("{} {}", files, plural(files, "file", "files"));
-    let meta = if uploads.is_empty() {
-        files_label
-    } else {
-        format!(
-            "{files_label} · {} {}",
+    let mut meta = files_label;
+    if downloads.len() > 1 {
+        meta.push_str(&format!(
+            " · {} {}",
+            downloads.len(),
+            plural(downloads.len(), "share", "shares")
+        ));
+    }
+    if !uploads.is_empty() {
+        meta.push_str(&format!(
+            " · {} {}",
             uploads.len(),
             plural(uploads.len(), "service", "services")
-        )
-    };
+        ));
+    }
 
     let mut lines = vec![header("mirror", &meta, elapsed, screen), String::new()];
     let mut budget = usize::MAX;
 
-    let title = format!("download · {}", download.label);
-    download_section(&mut lines, download, &title, false, screen, &mut budget);
+    for download in downloads {
+        let title = format!("download · {}", download.label);
+        download_section(&mut lines, download, &title, false, screen, &mut budget);
+    }
 
     if !uploads.is_empty() {
         lines.push(format!("  {}", style::paint("↓", Tone::Branch)));
@@ -364,7 +377,7 @@ pub fn mirror_lines(
     }
 
     lines.push(rule(screen));
-    lines.push(summary(mirror_counts(download, uploads), screen));
+    lines.push(summary(mirror_counts(downloads, uploads), screen));
     lines
 }
 
@@ -878,30 +891,21 @@ fn download_counts(batches: &[DownloadBatch], live: bool) -> Vec<String> {
     )
 }
 
-fn mirror_counts(download: &DownloadBatch, uploads: &[UploaderResult]) -> Vec<String> {
-    let downloaded = download
-        .items
-        .iter()
-        .filter(|item| item.outcome == Outcome::Ok)
-        .count();
+fn mirror_counts(downloads: &[DownloadBatch], uploads: &[UploaderResult]) -> Vec<String> {
+    let items = || downloads.iter().flat_map(|batch| &batch.items);
+    let downloaded = items().filter(|item| item.outcome == Outcome::Ok).count();
     let uploaded = uploads
         .iter()
         .flat_map(|result| &result.items)
         .filter(|item| item.outcome == Outcome::Ok)
         .count();
-    let skipped = download
-        .items
-        .iter()
+    let skipped = items()
         .filter(|item| item.outcome == Outcome::Skipped)
         .count();
-    let planned = download
-        .items
-        .iter()
+    let planned = items()
         .filter(|item| item.outcome == Outcome::Planned)
         .count();
-    let failed = download
-        .items
-        .iter()
+    let failed = items()
         .filter(|item| item.outcome == Outcome::Failed)
         .count()
         + uploads
@@ -1240,13 +1244,37 @@ mod tests {
         }];
         batch.finish();
 
-        let lines = mirror_lines(&batch, &[upload()], screen()).join("\n");
+        let lines = mirror_lines(std::slice::from_ref(&batch), &[upload()], screen()).join("\n");
         assert!(lines.contains("upio mirror"));
         assert!(lines.contains("download · pixeldrain: /u/abc"));
         assert!(lines.contains("upload · bunkr"));
         assert!(lines.contains("↓"));
         assert!(lines.contains("1 downloaded"));
         assert!(lines.contains("1 uploaded"));
+    }
+
+    #[test]
+    fn mirror_report_lists_every_share() {
+        let mut first = DownloadBatch::resolving("pixeldrain: /u/abc");
+        first.items = vec![Item {
+            outcome: Outcome::Ok,
+            bytes: 10,
+            ..Item::waiting("first.mp4", "first.mp4")
+        }];
+        first.finish();
+        let mut second = DownloadBatch::resolving("gofile: /d/def");
+        second.items = vec![Item {
+            outcome: Outcome::Ok,
+            bytes: 20,
+            ..Item::waiting("second.mp4", "second.mp4")
+        }];
+        second.finish();
+
+        let lines = mirror_lines(&[first, second], &[upload()], screen()).join("\n");
+        assert!(lines.contains("2 files"));
+        assert!(lines.contains("2 shares"));
+        assert!(lines.contains("download · pixeldrain: /u/abc"));
+        assert!(lines.contains("download · gofile: /d/def"));
     }
 
     #[test]

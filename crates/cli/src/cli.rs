@@ -90,10 +90,10 @@ pub struct DownloadArgs {
 
 /// Arguments for the `mirror` subcommand.
 #[derive(Debug, Parser)]
-#[command(about = "Download a share and upload it to other services")]
+#[command(about = "Download shares and upload them to other services")]
 pub struct MirrorArgs {
-    /// Share URL to download
-    pub url: String,
+    /// Share URLs to download
+    pub urls: Vec<String>,
 
     /// Destination uploader(s). Repeatable: -u bunkr -u gofile
     #[arg(short = 'u', long, required = true)]
@@ -127,7 +127,7 @@ pub struct MirrorArgs {
     #[arg(long)]
     pub staging: Option<PathBuf>,
 
-    /// Keep the temporary download directory after the upload
+    /// Download to the configured output directory instead of a temporary one and keep the files
     #[arg(long)]
     pub keep: bool,
 }
@@ -144,7 +144,7 @@ pub enum Commands {
         #[command(flatten)]
         args: DownloadArgs,
     },
-    /// Download a share and upload it to other services
+    /// Download shares and upload them to other services
     Mirror {
         #[command(flatten)]
         args: MirrorArgs,

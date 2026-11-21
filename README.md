@@ -116,16 +116,17 @@ upio download --dry-run 'https://gofile.io/d/<id>'
 
 ### `mirror`
 
-Download a share, then upload the files to one or more services:
+Download one or more shares, then upload the files to one or more services:
 
 ```sh
-upio mirror 'https://filester.me/f/<id>' -u bunkr -u gofile
+upio mirror 'https://filester.me/f/<id>' 'https://filester.me/f/<id2>' -u bunkr -u gofile
 ```
 
 `-n`/`-f` choose a destination folder or album, `-b` sets upload concurrency,
 `-c` sets download concurrency, and `-p` unlocks a protected source. Downloads
 go to a temporary directory; `--staging <dir>` reuses a directory and `--keep`
-preserves the temporary one.
+downloads to `global.download.output_dir` (or the current directory) and leaves
+the files there.
 
 ### `config`
 
