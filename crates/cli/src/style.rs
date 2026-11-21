@@ -114,6 +114,11 @@ pub fn visible_width(text: &str) -> usize {
     width
 }
 
+/// Terminal rows `text` occupies when the terminal is `width` columns wide.
+pub fn rows(text: &str, width: usize) -> usize {
+    visible_width(text).max(1).div_ceil(width.max(1))
+}
+
 /// Shorten plain text to `max` columns, marking the cut with an ellipsis.
 pub fn truncate(text: &str, max: usize) -> String {
     if visible_width(text) <= max {
@@ -295,5 +300,14 @@ mod tests {
     fn spread_reserves_the_right_hand_side() {
         let line = spread("left".to_string(), "right".to_string(), 20);
         assert_eq!(visible_width(&line), 20);
+    }
+
+    #[test]
+    fn rows_count_wrapped_lines() {
+        assert_eq!(rows("", 10), 1);
+        assert_eq!(rows("abcdef", 10), 1);
+        assert_eq!(rows("abcdefghij", 10), 1);
+        assert_eq!(rows("abcdefghijk", 10), 2);
+        assert_eq!(rows(&paint("x".repeat(25), Tone::Good), 10), 3);
     }
 }

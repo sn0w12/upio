@@ -128,7 +128,7 @@ impl<T: Send + 'static> Drop for Live<T> {
 
 fn paint<T>(inner: &Inner<T>, previous: usize) -> usize {
     let screen = style::screen();
-    let mut lines = {
+    let lines = {
         let state = inner
             .state
             .lock()
@@ -136,12 +136,28 @@ fn paint<T>(inner: &Inner<T>, previous: usize) -> usize {
         (inner.render)(&state, screen)
     };
 
-    let cap = screen.height.saturating_sub(1).max(1);
-    if lines.len() > cap {
-        lines.truncate(cap);
-    }
+    let (out, drawn) = frame(lines, previous, screen);
+    write_out(&out);
+    drawn
+}
 
-    let height = lines.len().max(previous);
+fn frame(mut lines: Vec<String>, previous: usize, screen: Screen) -> (String, usize) {
+    let wrap = screen.width + 1;
+    let cap = screen.height.saturating_sub(1).max(1);
+
+    let mut kept = 0;
+    let mut rows = 0;
+    for line in &lines {
+        let line_rows = style::rows(line, wrap);
+        if kept > 0 && rows + line_rows > cap {
+            break;
+        }
+        rows += line_rows;
+        kept += 1;
+    }
+    lines.truncate(kept);
+
+    let height = rows.max(previous);
     let mut out = String::new();
     if previous > 0 {
         out.push_str(&format!("\x1b[{previous}A"));
@@ -149,14 +165,13 @@ fn paint<T>(inner: &Inner<T>, previous: usize) -> usize {
     for line in &lines {
         out.push_str("\x1b[2K");
         out.push_str(line);
+        out.push_str("\x1b[K");
         out.push_str("\r\n");
     }
-    for _ in lines.len()..height {
+    for _ in rows..height {
         out.push_str("\x1b[2K\r\n");
     }
-
-    write_out(&out);
-    height
+    (out, height)
 }
 
 fn erase(lines: usize) {
@@ -187,5 +202,26 @@ mod tests {
         live.update(|value| *value += 2);
         assert_eq!(live.view(), 2);
         live.finish();
+    }
+
+    fn screen(width: usize, height: usize) -> Screen {
+        Screen { width, height }
+    }
+
+    #[test]
+    fn wrapped_lines_take_multiple_rows() {
+        let lines = vec!["x".repeat(45)];
+        let (out, rows) = frame(lines, 0, screen(20, 40));
+        assert_eq!(rows, 3);
+        assert!(out.contains(&"x".repeat(45)));
+    }
+
+    #[test]
+    fn a_shorter_frame_clears_rows_left_by_a_taller_one() {
+        let lines = vec!["x".to_string()];
+        let (out, rows) = frame(lines, 3, screen(20, 40));
+        assert_eq!(rows, 3);
+        assert!(out.starts_with("\x1b[3A"));
+        assert_eq!(out.matches("\x1b[2K").count(), 3);
     }
 }

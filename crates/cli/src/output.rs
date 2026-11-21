@@ -392,7 +392,7 @@ fn upload_section(
             continue;
         }
         let detail = render_item(lines, item, last, Kind::Upload, live, screen);
-        *budget = budget.saturating_sub(if detail { 2 } else { 1 });
+        *budget = budget.saturating_sub(detail);
     }
     if omitted > 0 {
         lines.push(overflow(omitted, "file"));
@@ -424,7 +424,7 @@ fn download_section(
             continue;
         }
         let detail = render_item(lines, item, last, Kind::Download, live, screen);
-        *budget = budget.saturating_sub(if detail { 2 } else { 1 });
+        *budget = budget.saturating_sub(detail);
     }
     if omitted > 0 {
         lines.push(overflow(omitted, "file"));
@@ -444,18 +444,21 @@ fn render_item(
     kind: Kind,
     live: bool,
     screen: Screen,
-) -> bool {
+) -> usize {
     let connector = if last { style::ELBOW } else { style::TEE };
     let prefix = format!("  {} ", style::paint(connector, Tone::Branch));
+    let wrap = screen.width + 1;
 
     if item.name.is_empty() {
         let (glyph, tone) = marker(item);
-        lines.push(format!(
+        let line = format!(
             "{prefix}{} {}",
             style::paint(glyph, tone),
             style::paint(&item.message, tone)
-        ));
-        return false;
+        );
+        let rows = style::rows(&line, wrap);
+        lines.push(line);
+        return rows;
     }
 
     let (glyph, marker_tone) = marker(item);
@@ -504,19 +507,19 @@ fn render_item(
 
     let Some((text, tone)) = detail.filter(|(text, _)| !text.is_empty()) else {
         if !live {
-            return false;
+            return 1;
         }
         lines.push(format!(
             "{continuation}{}",
             style::paint("→ …", Tone::Muted)
         ));
-        return true;
+        return 2;
     };
 
-    let room = screen.width.saturating_sub(12);
-    let text = style::truncate(&format!("→ {text}"), room);
-    lines.push(format!("{continuation}{}", style::paint(&text, tone)));
-    true
+    let line = format!("{continuation}{}", style::paint(format!("→ {text}"), tone));
+    let rows = 1 + style::rows(&line, wrap);
+    lines.push(line);
+    rows
 }
 
 fn row(
@@ -1182,6 +1185,30 @@ mod tests {
         waiting.finish();
         let final_lines = upload_lines(&[waiting], screen(), false);
         assert_eq!(live.len(), final_lines.len());
+    }
+
+    #[test]
+    fn long_links_stay_whole_in_live_and_final_reports() {
+        let url =
+            "https://fileditchvids.st/alpha/579fb1498977a4854a2a/CF1334043%20%ED%95%9C%EA%B5%AD.mp4";
+        let mut result = UploaderResult::running("fileditch", &["clip.mp4".into()]);
+        result.items[0].done(1);
+        result.items[0].detail = url.into();
+        result.finish();
+        let narrow = Screen {
+            width: 60,
+            height: 40,
+        };
+
+        let final_report = upload_lines(std::slice::from_ref(&result), narrow, false).join("\n");
+        assert!(final_report.contains(url));
+
+        let live = upload_lines(std::slice::from_ref(&result), narrow, true);
+        let detail = live
+            .iter()
+            .find(|line| line.contains(url))
+            .expect("live report keeps the whole link");
+        assert!(style::visible_width(detail) > narrow.width);
     }
 
     #[test]
