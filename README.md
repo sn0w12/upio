@@ -123,10 +123,10 @@ upio mirror 'https://filester.me/f/<id>' 'https://filester.me/f/<id2>' -u bunkr 
 ```
 
 `-n`/`-f` choose a destination folder or album, `-b` sets upload concurrency,
-`-c` sets download concurrency, and `-p` unlocks a protected source. Downloads
-go to a temporary directory; `--staging <dir>` reuses a directory and `--keep`
-downloads to `global.download.output_dir` (or the current directory) and leaves
-the files there.
+`-c` caps concurrent downloads across every share, and `-p` unlocks a protected
+source. Downloads go to a temporary directory; `--staging <dir>` reuses a
+directory and `--keep` downloads to `global.download.output_dir` (or the current
+directory) and leaves the files there.
 
 ### `config`
 

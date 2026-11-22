@@ -17,13 +17,8 @@ use crate::live::Live;
 use crate::output::{self, DownloadBatch, DownloadView, Item, Outcome, Phase};
 
 pub(crate) struct ServiceDownloader {
-    downloader: BoxedDownloader,
-    endpoint: UploaderEndpointConfig,
-}
-
-pub(crate) struct Downloaded {
-    pub(crate) batch: DownloadBatch,
-    pub(crate) files: Vec<PathBuf>,
+    pub(crate) downloader: BoxedDownloader,
+    pub(crate) endpoint: UploaderEndpointConfig,
 }
 
 pub(crate) fn build_service(
@@ -109,11 +104,8 @@ pub async fn run(args: DownloadArgs, config_path: Option<&Path>) -> Result<()> {
         let service = services
             .get(id.name())
             .expect("the service was built above");
-        batches.push(
-            download_service(label, url, service, &options, concurrency, args.dry_run)
-                .await
-                .batch,
-        );
+        batches
+            .push(download_service(label, url, service, &options, concurrency, args.dry_run).await);
     }
 
     output::print_download(&batches);
@@ -136,7 +128,7 @@ pub(crate) async fn download_service(
     options: &DownloadOptions,
     concurrency: usize,
     dry_run: bool,
-) -> Downloaded {
+) -> DownloadBatch {
     let live = Live::start(
         DownloadView {
             batches: vec![DownloadBatch::resolving(label.clone())],
@@ -185,11 +177,7 @@ pub(crate) async fn download_service(
 
     if dry_run {
         live.update(|view| view.batches[0].finish());
-        let batch = take_batch(live);
-        return Downloaded {
-            batch,
-            files: Vec::new(),
-        };
+        return take_batch(live);
     }
 
     let index = Arc::new(
@@ -203,7 +191,7 @@ pub(crate) async fn download_service(
     let progress = progress_callback(live.handle(), Arc::clone(&index));
     let observer = observer(live.handle(), Arc::clone(&index));
 
-    let results = download::download_observed(
+    download::download_observed(
         &plan,
         service.downloader.as_ref(),
         &service.endpoint,
@@ -214,28 +202,16 @@ pub(crate) async fn download_service(
     .await;
 
     live.update(|view| view.batches[0].finish());
-    let batch = take_batch(live);
-
-    let mut files = Vec::with_capacity(results.len());
-    for result in &results {
-        if result.error.is_none() {
-            files.push(result.destination.clone());
-        }
-    }
-
-    Downloaded { batch, files }
+    take_batch(live)
 }
 
-fn failed(live: Live<DownloadView>, message: String) -> Downloaded {
+fn failed(live: Live<DownloadView>, message: String) -> DownloadBatch {
     live.update(|view| {
         let batch = &mut view.batches[0];
         batch.phase = Phase::Failed;
         batch.items = vec![Item::notice(message)];
     });
-    Downloaded {
-        batch: take_batch(live),
-        files: Vec::new(),
-    }
+    take_batch(live)
 }
 
 fn take_batch(live: Live<DownloadView>) -> DownloadBatch {

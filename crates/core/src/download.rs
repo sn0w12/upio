@@ -314,15 +314,25 @@ pub struct DownloadResult {
 /// the conflict policy before any bytes are written.
 #[cfg(feature = "download")]
 pub fn plan(node: &RemoteNode, options: &DownloadOptions) -> Result<DownloadPlan, UpioError> {
+    plan_with_taken(node, options, &mut HashSet::new())
+}
+
+/// Like [`plan`], claiming destinations in `taken` so several plans can share
+/// one output directory without colliding.
+#[cfg(feature = "download")]
+pub fn plan_with_taken(
+    node: &RemoteNode,
+    options: &DownloadOptions,
+    taken: &mut HashSet<PathBuf>,
+) -> Result<DownloadPlan, UpioError> {
     let mut candidates = Vec::new();
     collect(node, Path::new(""), options.flat, &mut candidates);
 
-    let mut taken: HashSet<PathBuf> = HashSet::new();
     let mut files = Vec::with_capacity(candidates.len());
 
     for (relative, source) in candidates {
         let mut destination = options.output_dir.join(&relative);
-        let exists = destination.exists();
+        let exists = destination.exists() || taken.contains(&path_key(&destination));
         let skipped = options.on_conflict == ConflictPolicy::Skip && exists;
 
         if !skipped && options.on_conflict == ConflictPolicy::Rename {
@@ -770,6 +780,54 @@ mod tests {
             plan.files[1].destination,
             dir.path().join("Album/clip (1).mp4")
         );
+    }
+
+    #[cfg(feature = "download")]
+    #[test]
+    fn plans_can_share_one_destination_set() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut taken = HashSet::new();
+        let opts = options(dir.path());
+
+        let first = plan_with_taken(
+            &file("clip.mp4", "https://example.test/a"),
+            &opts,
+            &mut taken,
+        )
+        .unwrap();
+        let second = plan_with_taken(
+            &file("clip.mp4", "https://example.test/b"),
+            &opts,
+            &mut taken,
+        )
+        .unwrap();
+
+        assert_eq!(first.files[0].destination, dir.path().join("clip.mp4"));
+        assert_eq!(second.files[0].destination, dir.path().join("clip (1).mp4"));
+    }
+
+    #[cfg(feature = "download")]
+    #[test]
+    fn skip_policy_honors_destinations_claimed_by_another_plan() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut taken = HashSet::new();
+        let mut opts = options(dir.path());
+        opts.on_conflict = ConflictPolicy::Skip;
+
+        plan_with_taken(
+            &file("clip.mp4", "https://example.test/a"),
+            &opts,
+            &mut taken,
+        )
+        .unwrap();
+        let second = plan_with_taken(
+            &file("clip.mp4", "https://example.test/b"),
+            &opts,
+            &mut taken,
+        )
+        .unwrap();
+
+        assert!(second.files[0].skipped);
     }
 
     #[cfg(feature = "download")]

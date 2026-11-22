@@ -111,7 +111,7 @@ pub struct MirrorArgs {
     #[arg(short = 'b', long)]
     pub batch_size: Option<usize>,
 
-    /// Maximum concurrent downloads (defaults to global.download.concurrency)
+    /// Maximum concurrent downloads across all shares (defaults to global.download.concurrency)
     #[arg(short = 'c', long)]
     pub concurrency: Option<usize>,
 
