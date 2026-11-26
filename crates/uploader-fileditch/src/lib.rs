@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
+use reqwest::header::{AUTHORIZATION, CONTENT_LENGTH, CONTENT_TYPE};
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::Value;
@@ -68,11 +68,13 @@ fn parse_upload_response(
 
 /// Fileditch.com uploader.
 ///
-/// This service requires no authentication token, so only [`FileditchUploader::new`]
-/// is provided. Implements [`Uploader`] and can be driven by the shared
-/// pipeline.
+/// Construction is synchronous; a login token is optional. Use
+/// [`FileditchUploader::new`] for anonymous uploads or
+/// [`FileditchUploader::with_token`] to list uploads in an account. A token can
+/// also be supplied per-call via [`UploaderEndpointConfig::token`].
 pub struct FileditchUploader {
     client: Client,
+    token: Option<String>,
 }
 
 impl FileditchUploader {
@@ -80,9 +82,20 @@ impl FileditchUploader {
     pub const CAPABILITIES: UploaderCapabilities = UploaderCapabilities::any();
     pub const MAX_FILE_SIZE: FileSize = FileSize::from_gb(25);
 
+    /// Create an uploader without a token. Supply one via
+    /// [`FileditchUploader::with_token`] or the upload config.
     pub fn new() -> Self {
         Self {
             client: Client::new(),
+            token: None,
+        }
+    }
+
+    /// Create an uploader that authenticates with a login token.
+    pub fn with_token(token: &str) -> Self {
+        Self {
+            client: Client::new(),
+            token: Some(token.to_string()),
         }
     }
 }
@@ -107,7 +120,7 @@ impl Uploader for FileditchUploader {
     async fn upload_file_with_progress(
         &self,
         file_path: &str,
-        _config: &UploaderEndpointConfig,
+        config: &UploaderEndpointConfig,
         progress: Option<upio_core::http::UploadProgress>,
     ) -> Result<UploadResult, UploadError> {
         let file_name = file_name_from_path(file_path);
@@ -127,16 +140,18 @@ impl Uploader for FileditchUploader {
         let total = file_size.len();
         let body = reqwest::Body::wrap_stream(counted_file_stream(file, total, progress));
 
-        let response = self
+        let mut request = self
             .client
             .post("https://new.fileditch.com/upload.php")
             .query(&[("filename", file_name.as_str())])
             .header(CONTENT_TYPE, "application/octet-stream")
-            .header(CONTENT_LENGTH, file_size.len().to_string())
-            .body(body)
-            .send()
-            .await
-            .map_err(map_reqwest_error)?;
+            .header(CONTENT_LENGTH, file_size.len().to_string());
+
+        if let Some(token) = config.token.as_deref().or(self.token.as_deref()) {
+            request = request.header(AUTHORIZATION, format!("Bearer {}", token));
+        }
+
+        let response = request.body(body).send().await.map_err(map_reqwest_error)?;
 
         let (status_code, raw_response) = parse_json_response(response).await?;
         parse_upload_response(raw_response, status_code)
@@ -168,7 +183,7 @@ pub static FILEDITCH_SERVICE: ServiceDef = ServiceDef {
     name: FileditchUploader::NAME,
     display_name: "Fileditch",
     crate_name: env!("CARGO_PKG_NAME"),
-    credential: Credential::None,
+    credential: Credential::OptionalToken,
     supports_folders: false,
     capabilities: FileditchUploader::CAPABILITIES,
     max_file_size: FileditchUploader::MAX_FILE_SIZE,
@@ -176,6 +191,9 @@ pub static FILEDITCH_SERVICE: ServiceDef = ServiceDef {
     download: DOWNLOAD,
 };
 
-fn build(_config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
-    Ok(Box::new(FileditchUploader::new()))
+fn build(config: &UploaderEndpointConfig) -> Result<BoxedUploader, BuildError> {
+    Ok(Box::new(match config.token.as_deref() {
+        Some(token) => FileditchUploader::with_token(token),
+        None => FileditchUploader::new(),
+    }))
 }

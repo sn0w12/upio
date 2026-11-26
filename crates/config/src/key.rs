@@ -23,6 +23,7 @@ pub enum ConfigKey {
     GofileFolderId,
     GofileServer,
     GofileLinkPassword,
+    FileditchToken,
     FilesterToken,
     FilesterFolderId,
     FilesterLinkPassword,
@@ -48,6 +49,7 @@ impl ConfigKey {
         Self::GofileFolderId,
         Self::GofileServer,
         Self::GofileLinkPassword,
+        Self::FileditchToken,
         Self::FilesterToken,
         Self::FilesterFolderId,
         Self::FilesterLinkPassword,
@@ -74,6 +76,7 @@ impl ConfigKey {
             Self::GofileFolderId => "gofile.folder_id",
             Self::GofileServer => "gofile.server",
             Self::GofileLinkPassword => "gofile.link_password",
+            Self::FileditchToken => "fileditch.token",
             Self::FilesterToken => "filester.token",
             Self::FilesterFolderId => "filester.folder_id",
             Self::FilesterLinkPassword => "filester.link_password",
@@ -94,6 +97,7 @@ impl ConfigKey {
             Self::BunkrToken
                 | Self::GofileToken
                 | Self::GofileLinkPassword
+                | Self::FileditchToken
                 | Self::FilesterToken
                 | Self::FilesterLinkPassword
                 | Self::PixeldrainToken
@@ -123,6 +127,7 @@ impl ConfigKey {
             Self::GofileFolderId => folder_id_of(&config.gofile),
             Self::GofileServer => server_of(&config.gofile),
             Self::GofileLinkPassword => text_of(&config.gofile, |c| c.link_password.as_deref()),
+            Self::FileditchToken => token_of(&config.fileditch),
             Self::FilesterToken => token_of(&config.filester),
             Self::FilesterFolderId => folder_id_of(&config.filester),
             Self::FilesterLinkPassword => text_of(&config.filester, |c| c.link_password.as_deref()),
@@ -198,6 +203,7 @@ impl ConfigKey {
             Self::GofileFolderId => endpoint(&mut config.gofile).folder_id = opt(value),
             Self::GofileServer => endpoint(&mut config.gofile).server = opt(value),
             Self::GofileLinkPassword => endpoint(&mut config.gofile).link_password = opt(value),
+            Self::FileditchToken => endpoint(&mut config.fileditch).token = opt(value),
             Self::FilesterToken => endpoint(&mut config.filester).token = opt(value),
             Self::FilesterFolderId => endpoint(&mut config.filester).folder_id = opt(value),
             Self::FilesterLinkPassword => endpoint(&mut config.filester).link_password = opt(value),

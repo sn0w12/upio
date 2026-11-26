@@ -49,7 +49,8 @@ Constructors are synchronous. Network setup happens in `init()`:
 
 - `BunkrUploader::with_token(token)`, requires a token.
 - `GoFileUploader::new()` or `GoFileUploader::with_token(token)`, token optional.
-- `FileditchUploader::new()`, no token.
+- `FileditchUploader::new()` or `FileditchUploader::with_token(token)`, token
+  optional.
 - `FilesterUploader::new()` or `FilesterUploader::with_token(token)`, token optional.
 - `PixeldrainUploader::new()` or `PixeldrainUploader::with_token(token)`,
   token required; Pixeldrain rejects anonymous uploads.
@@ -65,9 +66,9 @@ both drive preprocessing. The `Uploader` trait also exposes
 `get_or_create_folder(folder_name, config)`, which resolves a folder by name
 and creates it when it does not exist. The `config` argument supplies per-call
 settings such as a token that differs from the one the uploader was built
-with; GoFile and Filester fall back from `config.token` to their own stored
-credential. Bunkr, GoFile, Filester, GoonBox, and Pixeldrain implement folder
-resolution; others report no folder support.
+with; GoFile, Fileditch, and Filester fall back from `config.token` to their
+own stored credential. Bunkr, GoFile, Filester, GoonBox, and Pixeldrain
+implement folder resolution; others report no folder support.
 
 When you don't want to construct an uploader by hand, use the `upio::registry`
 module. It is the single source of truth for known uploaders: `UploaderId`

@@ -55,6 +55,14 @@ static GOFILE_FIELDS: &[FieldSpec] = &[
     },
 ];
 
+static FILEDITCH_FIELDS: &[FieldSpec] = &[FieldSpec {
+    key: ConfigKey::FileditchToken,
+    label: "Login token",
+    placeholder: "Optional Fileditch login token",
+    help: "Optional. Uploads made with it are listed in your account.",
+    secret: true,
+}];
+
 static FILESTER_FIELDS: &[FieldSpec] = &[
     FieldSpec {
         key: ConfigKey::FilesterToken,
@@ -108,7 +116,7 @@ fn fields(id: UploaderId) -> &'static [FieldSpec] {
     match id.name() {
         "bunkr" => BUNKR_FIELDS,
         "gofile" => GOFILE_FIELDS,
-        "fileditch" => &[],
+        "fileditch" => FILEDITCH_FIELDS,
         "filester" => FILESTER_FIELDS,
         "goonbox" => GOONBOX_FIELDS,
         "pixeldrain" => PIXELDRAIN_FIELDS,

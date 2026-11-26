@@ -455,12 +455,21 @@ fn is_uploader_enabled_matches_exact_names_only() {
 }
 
 #[test]
-fn removed_fileditch_token_key_is_not_parseable() {
-    assert!("fileditch.token".parse::<upio_config::ConfigKey>().is_err());
-    // The FromStr arm is gone; ALL no longer contains it either.
-    for key in upio_config::ConfigKey::ALL {
-        assert_ne!(key.as_str(), "fileditch.token");
-    }
+fn fileditch_token_key_is_a_secret_credential() {
+    let key = "fileditch.token"
+        .parse::<upio_config::ConfigKey>()
+        .expect("fileditch.token is a config key");
+    assert!(ConfigKey::ALL.contains(&key));
+    assert_eq!(key.as_str(), "fileditch.token");
+    assert!(key.is_secret());
+
+    let mut config = Config::default();
+    config.set_value(&key, "login-token").unwrap();
+    assert_eq!(
+        config.fileditch.as_ref().unwrap().token.as_deref(),
+        Some("login-token")
+    );
+    assert_eq!(config.get_value(&key), "login-token");
 }
 
 #[test]

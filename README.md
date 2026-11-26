@@ -12,7 +12,7 @@ Currently supported services:
 | ----------- | ------------- | -------------- | -------- | ------------ |
 | Bunkr.cr    | Yes           | Yes            | Yes      | All          |
 | GoFile.io   | Optional\*    | Yes            | Yes      | All          |
-| Fileditch   | No            | No             | Yes      | All          |
+| Fileditch   | Optional\*    | No             | Yes      | All          |
 | Filester.me | Optional\*    | Yes            | Yes      | All          |
 | GoonBox     | Yes           | Yes            | Yes      | Image        |
 | Pixeldrain  | Yes           | Yes            | Yes      | All          |
@@ -208,6 +208,7 @@ server = "store4" # optional; auto-selected when unset
 link_password = "." # optional; unlocks password-protected folders
 
 [fileditch]
+token = "." # optional; uploads with it are listed in your account
 
 [filester]
 token = "."

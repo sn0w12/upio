@@ -539,9 +539,13 @@ mod tests {
         config
             .set_value(&ConfigKey::GoonboxPassword, "goon-secret")
             .unwrap();
+        config
+            .set_value(&ConfigKey::FileditchToken, "fd-secret")
+            .unwrap();
         let toml = masked_toml(&config).unwrap();
         assert!(!toml.contains("pd-secret"));
         assert!(!toml.contains("goon-secret"));
+        assert!(!toml.contains("fd-secret"));
         assert!(toml.contains("[REDACTED]"));
     }
 

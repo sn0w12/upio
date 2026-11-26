@@ -221,3 +221,21 @@ fn build_fileditch_requires_no_token() {
     };
     assert_eq!(uploader.name(), "fileditch");
 }
+
+#[test]
+fn build_fileditch_with_token_succeeds() {
+    let id = UploaderId::from_name("fileditch").unwrap();
+    let config = UploaderEndpointConfig {
+        token: Some("login-token".to_string()),
+        ..Default::default()
+    };
+    let uploader = match build_uploader(id, &config) {
+        Ok(uploader) => uploader,
+        Err(e) => panic!("build failed: {}", e),
+    };
+    assert_eq!(uploader.name(), "fileditch");
+    assert_eq!(
+        id.def().credential,
+        upio::registry::Credential::OptionalToken
+    );
+}
